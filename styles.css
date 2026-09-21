@@ -60,6 +60,10 @@ a {
   color: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 :focus-visible {
   outline: 3px solid color-mix(in srgb, var(--focus), transparent 68%);
   outline-offset: 2px;
@@ -170,6 +174,38 @@ a {
   width: 100%;
   min-width: 0;
   padding: var(--s5) clamp(var(--s4), 3vw, var(--s6)) 48px;
+}
+
+.sidebar-auth-action {
+  width: 100%;
+  margin-top: var(--s2);
+}
+
+.login-layout {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 96px);
+}
+
+.login-panel {
+  display: grid;
+  gap: var(--s4);
+  width: min(100%, 420px);
+  padding: var(--s5);
+  box-shadow: var(--shadow-soft);
+}
+
+.auth-panel {
+  margin: min(18vh, 160px) auto 0;
+  max-width: 460px;
+}
+
+.form-message {
+  min-height: 1.2rem;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .page-head {

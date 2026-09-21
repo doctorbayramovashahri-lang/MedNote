@@ -10,8 +10,9 @@ Current stack:
 - CSS
 - JavaScript
 - IndexedDB
+- Supabase Auth
 
-The current bundled data is fictitious demo data for local testing and product evaluation. Supabase and any backend service are not connected yet.
+The current bundled data is fictitious demo data for local testing and product evaluation. Supabase Auth is connected for login/session gating, but patient and encounter data still stay in local IndexedDB.
 
 ## Run Locally
 

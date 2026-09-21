@@ -2,8 +2,18 @@ const DB_NAME = "mednote-local-mvp";
 const DB_VERSION = 1;
 const STORE = "state";
 const STATE_KEY = "mednote-state";
+const SUPABASE_URL = "https://ddnhkwpdxcrvkfopkpmy.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2ZpBanYunxaZRXnPPkN08Q_gjGKjjK0";
 
 const app = document.querySelector("#app");
+const logoutButton = document.querySelector("#logoutButton");
+const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
 
 const uid = () =>
   crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -359,6 +369,7 @@ const dbRepository = (() => {
 })();
 
 let state = { patients: [], visits: [], attachments: [], query: "" };
+let authState = { status: "auth-loading", session: null, error: "" };
 
 async function hydrate() {
   state.patients = await dbRepository.getPatients();
@@ -366,6 +377,118 @@ async function hydrate() {
   const allAttachments = await Promise.all(state.patients.map((patient) => dbRepository.getAttachments(patient.id)));
   state.visits = allVisits.flat();
   state.attachments = allAttachments.flat();
+}
+
+function resetUiState() {
+  state = { patients: [], visits: [], attachments: [], query: "" };
+}
+
+function setAuthState(nextState) {
+  authState = { ...authState, ...nextState };
+  if (logoutButton) logoutButton.hidden = authState.status !== "authenticated";
+}
+
+function renderAuthLoading() {
+  app.innerHTML = `
+    <section class="state-panel auth-panel">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Проверяем сессию...</p>
+    </section>
+  `;
+}
+
+function renderLogin(message = "") {
+  if (logoutButton) logoutButton.hidden = true;
+  app.innerHTML = `
+    <section class="login-layout" aria-labelledby="loginTitle">
+      <form class="panel login-panel" data-login-form>
+        <div>
+          <p class="eyebrow">MedNote</p>
+          <h1 id="loginTitle">Вход врача</h1>
+        </div>
+        <div class="field">
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" name="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="loginPassword">Пароль</label>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <p class="form-message" data-login-message>${escapeHtml(message)}</p>
+        <button class="button" type="submit">Войти</button>
+      </form>
+    </section>
+  `;
+  bindLoginForm();
+}
+
+function renderAuthError(message) {
+  app.innerHTML = `
+    <section class="state-panel auth-panel">
+      <h2>Не удалось подготовить вход</h2>
+      <p>${escapeHtml(message)}</p>
+    </section>
+  `;
+}
+
+function bindLoginForm() {
+  const form = document.querySelector("[data-login-form]");
+  if (!form) return;
+  const message = form.querySelector("[data-login-message]");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!supabaseClient) {
+      if (message) message.textContent = "Клиент Supabase не загружен. Проверьте соединение и обновите страницу.";
+      return;
+    }
+    const submit = form.querySelector('button[type="submit"]');
+    const formData = new FormData(form);
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+    if (message) message.textContent = "";
+    if (submit) submit.disabled = true;
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      if (message) message.textContent = "Не удалось войти. Проверьте email и пароль.";
+      if (submit) submit.disabled = false;
+      return;
+    }
+    setAuthState({ status: "authenticated", session: data.session, error: "" });
+    await route(location.hash || "#/");
+  });
+}
+
+async function initializeAuth() {
+  renderAuthLoading();
+  if (!supabaseClient) {
+    setAuthState({ status: "unauthenticated", session: null, error: "Supabase JS не загружен." });
+    renderAuthError("Supabase JS не загружен. Проверьте сетевой доступ к CDN и обновите страницу.");
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) {
+    setAuthState({ status: "unauthenticated", session: null, error: error.message });
+    renderLogin("Сессия недействительна. Войдите снова.");
+  } else {
+    setAuthState({
+      status: data.session ? "authenticated" : "unauthenticated",
+      session: data.session,
+      error: ""
+    });
+    await route(location.hash || "#/");
+  }
+
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if (event === "SIGNED_OUT" || !session) {
+      resetUiState();
+      setAuthState({ status: "unauthenticated", session: null, error: "" });
+      renderLogin();
+      return;
+    }
+    setAuthState({ status: "authenticated", session, error: "" });
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") await route(location.hash || "#/");
+  });
 }
 
 function latestVisit(patientId) {
@@ -1029,6 +1152,14 @@ function weightHistoryViewer(patient) {
 
 async function route(targetHash = location.hash || "#/") {
   if (targetHash !== location.hash) location.hash = targetHash;
+  if (authState.status === "auth-loading") {
+    renderAuthLoading();
+    return;
+  }
+  if (authState.status !== "authenticated") {
+    renderLogin(authState.error);
+    return;
+  }
   await hydrate();
   const encounterMatch = location.hash.match(/^#\/patient\/([^/]+)\/encounter\/([^/]+)$/);
   const match = location.hash.match(/^#\/patient\/([^/]+)$/);
@@ -1168,7 +1299,16 @@ function bindEncounterWorkspace(patientId, visitId) {
   });
 }
 
+if (logoutButton) {
+  logoutButton.addEventListener("click", async () => {
+    if (!supabaseClient) return;
+    logoutButton.disabled = true;
+    await supabaseClient.auth.signOut();
+    logoutButton.disabled = false;
+  });
+}
+
 window.addEventListener("hashchange", () => route());
-route().catch((error) => {
+initializeAuth().catch((error) => {
   app.innerHTML = `<section class="state-panel"><h2>Не удалось открыть локальное хранилище</h2><p>${escapeHtml(error.message)}</p></section>`;
 });

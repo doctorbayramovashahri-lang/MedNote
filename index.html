@@ -24,7 +24,8 @@
         </nav>
         <div class="storage-note">
           <strong>Локальная версия</strong>
-          <span>Данные только в этом браузере</span>
+          <span>Данные пациентов пока только в этом браузере</span>
+          <button class="text-button sidebar-auth-action" id="logoutButton" type="button" hidden>Выйти</button>
         </div>
       </aside>
 
@@ -47,6 +48,7 @@
       </div>
     </template>
 
-    <script src="app.js?v=mobileux12-clean3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js"></script>
+    <script src="app.js?v=auth-foundation1"></script>
   </body>
 </html>
