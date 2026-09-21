@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MedNote Local MVP</title>
+    <link rel="stylesheet" href="styles.css?v=mobileux12-clean3" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Основная навигация">
+        <a class="brand" href="#/" aria-label="MedNote, список пациентов">
+          <span class="brand-mark">M</span>
+          <span>
+            <strong>MedNote</strong>
+            <small>память врача</small>
+          </span>
+        </a>
+        <nav class="nav-list" aria-label="Разделы">
+          <a class="nav-item active" href="#/" aria-current="page">
+            <span aria-hidden="true">●</span>
+            Пациенты
+          </a>
+        </nav>
+        <div class="storage-note">
+          <strong>Локальная версия</strong>
+          <span>Данные только в этом браузере</span>
+        </div>
+      </aside>
+
+      <main id="app" class="main" tabindex="-1">
+        <section class="state-panel">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Загрузка локальной картотеки...</p>
+        </section>
+      </main>
+    </div>
+
+    <template id="attachmentPreviewTemplate">
+      <div class="attachment-row">
+        <div class="attachment-thumb" aria-hidden="true"></div>
+        <div class="attachment-meta">
+          <strong></strong>
+          <span></span>
+        </div>
+        <button class="icon-button danger" type="button" aria-label="Удалить вложение">×</button>
+      </div>
+    </template>
+
+    <script src="app.js?v=mobileux12-clean3"></script>
+  </body>
+</html>
