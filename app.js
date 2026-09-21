@@ -4,6 +4,8 @@ const STORE = "state";
 const STATE_KEY = "mednote-state";
 const SUPABASE_URL = "https://ddnhkwpdxcrvkfopkpmy.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2ZpBanYunxaZRXnPPkN08Q_gjGKjjK0";
+const AUTH_TECHNICAL_DOMAIN = "mednote.local";
+const LOGIN_PATTERN = /^[a-z0-9._-]+$/;
 
 const app = document.querySelector("#app");
 const logoutButton = document.querySelector("#logoutButton");
@@ -147,6 +149,16 @@ function splitItems(value = "") {
     .split(/[,;\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeLogin(login = "") {
+  return login.trim().toLowerCase();
+}
+
+function loginToTechnicalEmail(login = "") {
+  const normalizedLogin = normalizeLogin(login);
+  if (!LOGIN_PATTERN.test(normalizedLogin)) return null;
+  return `${normalizedLogin}@${AUTH_TECHNICAL_DOMAIN}`;
 }
 
 function makeDemoFile(name, mime, content) {
@@ -401,14 +413,14 @@ function renderLogin(message = "") {
   if (logoutButton) logoutButton.hidden = true;
   app.innerHTML = `
     <section class="login-layout" aria-labelledby="loginTitle">
-      <form class="panel login-panel" data-login-form>
+      <form class="panel login-panel" data-login-form novalidate>
         <div>
           <p class="eyebrow">MedNote</p>
           <h1 id="loginTitle">Вход врача</h1>
         </div>
         <div class="field">
-          <label for="loginEmail">Email</label>
-          <input id="loginEmail" name="email" type="email" autocomplete="username" required />
+          <label for="loginName">Логин</label>
+          <input id="loginName" name="login" type="text" inputmode="text" autocomplete="username" autocapitalize="none" spellcheck="false" required />
         </div>
         <div class="field">
           <label for="loginPassword">Пароль</label>
@@ -443,13 +455,18 @@ function bindLoginForm() {
     }
     const submit = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
-    const email = String(formData.get("email") || "").trim();
+    const login = String(formData.get("login") || "");
+    const technicalEmail = loginToTechnicalEmail(login);
     const password = String(formData.get("password") || "");
     if (message) message.textContent = "";
+    if (!technicalEmail) {
+      if (message) message.textContent = "Проверьте логин.";
+      return;
+    }
     if (submit) submit.disabled = true;
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email: technicalEmail, password });
     if (error) {
-      if (message) message.textContent = "Не удалось войти. Проверьте email и пароль.";
+      if (message) message.textContent = "Не удалось войти. Проверьте логин и пароль.";
       if (submit) submit.disabled = false;
       return;
     }

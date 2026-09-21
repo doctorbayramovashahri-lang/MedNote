@@ -120,6 +120,14 @@ This keeps the current UI contract stable while handling concurrent tabs/devices
 
 The app now gates the local IndexedDB MVP behind Supabase Auth. This proves login, restored session, logout, and route protection, but it does not make local medical data cloud-owned yet.
 
+The doctor-facing login form accepts a simple username and password. MedNote normalizes the username and maps it to an internal technical email for Supabase Auth:
+
+```text
+doctor -> doctor@mednote.local
+```
+
+That technical email is an implementation detail for Supabase email/password Auth. It is not the doctor's contact email and should not be shown in the ordinary login flow.
+
 Supabase public browser configuration is limited to:
 
 - project URL;
