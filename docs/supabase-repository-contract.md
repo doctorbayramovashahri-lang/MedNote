@@ -64,6 +64,12 @@ It also implements cloud visit write foundation methods, still not connected to 
 - `getOrCreateDraftVisit(patientId)`
 - `updateVisit(id, input)`
 
+It also implements cloud attachment foundation methods, still not connected to the production UI:
+
+- `addAttachment(patientId, visitId, file)`
+- `removeAttachment(id)`
+- `getAttachmentSignedUrl(id, expiresIn = 120)`
+
 It also includes centralized mapping helpers for patients, patient weights, visits, and attachment metadata so snake_case/camelCase conversion does not leak into UI code.
 
 ## Cloud Mapping Rules
@@ -104,13 +110,15 @@ Cloud attachment metadata does not fabricate `dataUrl`. UI work is still require
 
 ## Storage Path Contract
 
-Future Supabase Storage objects should use this canonical private path shape:
+Supabase Storage objects use this canonical private path shape:
 
 ```text
 {doctor_id}/{patient_id}/{visit_id}/{attachment_id}/{safe-filename}
 ```
 
-The attachment id is intentionally its own path segment. Storage bucket creation, Storage policies, upload/download, and signed URLs are out of scope for the current foundation slice.
+The attachment id is intentionally its own path segment. The Storage bucket is `medical-attachments`, it is private, and Storage policies allow authenticated doctors to insert, select, and delete only objects whose first path segment matches their own `auth.uid()`.
+
+Signed URLs are short-lived runtime artifacts. They are created on demand with a default TTL of 120 seconds and are not stored in Postgres.
 
 ## IndexedDB Assumptions Leaking Into UI
 
@@ -202,7 +210,7 @@ Cloud visit writes now use `CONFLICT` for stale optimistic updates, missing vers
 
 `createVisit(patientId, input, files = [])` creates a cloud visit for the authenticated doctor and sets `doctor_id` from the Supabase session only. The method does not accept ownership fields from UI input.
 
-Storage is not configured yet. If `files` contains any uploaded item, the method fails with a controlled repository error instead of silently ignoring files, saving local attachments, or creating fake attachment metadata. When `files` is empty, the visit row can be inserted and is returned as a normalized Visit.
+When `files` contains uploaded items, cloud `createVisit()` creates the visit and stores each file through `addAttachment()`. It tracks successfully created attachments. If a later attachment fails, it attempts compensating cleanup in reverse order for already created attachments, then attempts to delete the just-created visit, and reports the original attachment failure rather than silently mixing local and cloud state.
 
 `getOrCreateDraftVisit(patientId)` preserves the current UI contract while relying on the database invariant that only one draft may exist for `(doctor_id, patient_id)`. It first reads an existing draft. If none exists, it inserts a draft. If a concurrent insert wins the partial unique index race, it rereads the draft and returns that row.
 
@@ -228,6 +236,18 @@ On `RepositoryError(CONFLICT)`, autosave stops for the current Visit and the exi
 
 The production source of truth is still local IndexedDB. The local repository accepts the same `expectedVersion` shape for compatibility and returns the saved Visit, but local storage is not intended to emulate server-side conflict detection.
 
+## Cloud Attachment Behavior
+
+`addAttachment(patientId, visitId, file)` requires an authenticated session and first verifies that the Visit is available to the current doctor through RLS. It then generates an attachment UUID, builds the canonical Storage path, validates that the file is present and not larger than the configured 25 MB limit, uploads the object with `upsert: false`, and inserts metadata into `public.attachments`.
+
+If Storage upload fails, no metadata row is created. If metadata insert fails after a successful upload, the repository attempts to remove the uploaded object and then reports the original metadata failure.
+
+`removeAttachment(id)` reads owned metadata first, deletes the private Storage object, and only then deletes the metadata row. If object deletion fails, metadata remains visible so the operation can be retried. If object deletion succeeds but metadata deletion fails, a stale metadata row may remain but the private object is already gone; that state is recoverable by retry or audit.
+
+`getAttachmentSignedUrl(id, expiresIn)` reads owned metadata through RLS and creates a short-lived signed URL for the private object. The URL is not stored in application state or database rows.
+
+The production UI still uses local IndexedDB attachments with `dataUrl`. Cloud attachment methods are foundation-only until Patient, Visit, and Attachment source of truth switch together.
+
 ## Draft Conflict Handling
 
 The database enforces one draft per `doctor_id + patient_id`. Cloud `getOrCreateDraftVisit(patientId)` now:
@@ -240,7 +260,7 @@ This keeps the current UI contract stable while handling concurrent tabs/devices
 
 ## Required UI Changes Before Cloud Switch
 
-- Stop storing attachment `dataUrl` as the only open mechanism.
+- Stop storing attachment `dataUrl` as the only open mechanism in the cloud UI path.
 - Carry `visit.version` through encounter state and update calls.
 - Avoid full-route hydration of all visits and attachments when cloud latency matters.
 - Add explicit loading/error states around repository calls that can fail due to network, auth expiry, RLS, or concurrency.

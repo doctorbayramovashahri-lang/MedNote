@@ -6,11 +6,15 @@ const SUPABASE_URL = "https://ddnhkwpdxcrvkfopkpmy.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2ZpBanYunxaZRXnPPkN08Q_gjGKjjK0";
 const AUTH_TECHNICAL_DOMAIN = "mednote.local";
 const LOGIN_PATTERN = /^[a-z0-9._-]+$/;
-const STORAGE_ATTACHMENTS_BUCKET = "mednote-attachments";
+const STORAGE_ATTACHMENTS_BUCKET = "medical-attachments";
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const SIGNED_ATTACHMENT_URL_TTL_SECONDS = 120;
 const PATIENT_SELECT_COLUMNS =
   "id, full_name, birth_date, sex, phone, email, height_cm, allergies, conditions, therapy, context_notes, about, created_at, updated_at";
 const VISIT_SELECT_COLUMNS =
   "id, patient_id, date, format, status, note, decision, next_step, next_step_timing, started_at, completed_at, created_at, updated_at, version";
+const ATTACHMENT_SELECT_COLUMNS =
+  "id, patient_id, visit_id, kind, original_filename, mime_type, size_bytes, storage_bucket, storage_path, added_at, created_at";
 const REPOSITORY_ERROR_TYPES = {
   AUTH: "AUTH",
   NETWORK: "NETWORK",
@@ -190,6 +194,12 @@ function safeStorageFilename(filename = "") {
   return normalized || "attachment";
 }
 
+function attachmentKindFromMime(mime = "") {
+  if (mime.includes("pdf")) return "pdf";
+  if (mime.startsWith("image/")) return "analysis-photo";
+  return "document";
+}
+
 function storagePathForAttachment({ doctorId, patientId, visitId, attachmentId, filename }) {
   return [doctorId, patientId, visitId, attachmentId, safeStorageFilename(filename)].map(encodeURIComponent).join("/");
 }
@@ -335,10 +345,6 @@ function visitExpectedVersion(input = {}) {
   return version;
 }
 
-function hasUploadedFiles(files) {
-  return Boolean(files && typeof files.length === "number" && files.length > 0);
-}
-
 function mapAttachmentMetadataRow(row = {}) {
   return {
     id: row.id,
@@ -362,13 +368,43 @@ function mapAttachmentMetadataInputToSupabasePayload(input = {}, { doctorId, pat
     doctor_id: doctorId,
     patient_id: patientId,
     visit_id: visitId,
-    kind: input.kind || "document",
+    kind: input.kind || attachmentKindFromMime(input.mime || input.type || ""),
     original_filename: input.name || "attachment",
     mime_type: input.mime || "application/octet-stream",
     size_bytes: Number(input.size || 0),
     storage_bucket: STORAGE_ATTACHMENTS_BUCKET,
     storage_path: storagePathForAttachment({ doctorId, patientId, visitId, attachmentId, filename: input.name })
   };
+}
+
+function blobFromDataUrl(dataUrl = "") {
+  const match = String(dataUrl).match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  if (!match) return null;
+  const mime = match[1] || "application/octet-stream";
+  const isBase64 = Boolean(match[2]);
+  const body = isBase64 ? atob(match[3]) : decodeURIComponent(match[3]);
+  const bytes = new Uint8Array(body.length);
+  for (let index = 0; index < body.length; index += 1) bytes[index] = body.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
+}
+
+function attachmentUploadBody(file = {}) {
+  if (file instanceof Blob) return file;
+  if (file.blob instanceof Blob) return file.blob;
+  if (file.file instanceof Blob) return file.file;
+  if (file.dataUrl) return blobFromDataUrl(file.dataUrl);
+  return null;
+}
+
+function validateAttachmentFile(file = {}, body = null) {
+  const size = Number(file.size || body?.size || 0);
+  if (!body || !size) {
+    throw new RepositoryError(REPOSITORY_ERROR_TYPES.CONFLICT, "Attachment file is empty or unavailable.");
+  }
+  if (size > MAX_ATTACHMENT_BYTES) {
+    throw new RepositoryError(REPOSITORY_ERROR_TYPES.CONFLICT, "Attachment file exceeds the configured upload size limit.");
+  }
+  return size;
 }
 
 function groupRowsBy(rows = [], key) {
@@ -552,9 +588,27 @@ const supabaseRepository = (() => {
   }
 
   function selectAttachmentColumns(query) {
-    return query.select(
-      "id, patient_id, visit_id, kind, original_filename, mime_type, size_bytes, storage_bucket, storage_path, added_at, created_at"
-    );
+    return query.select(ATTACHMENT_SELECT_COLUMNS);
+  }
+
+  function attachmentBucket() {
+    if (!supabaseClient) throw new RepositoryError(REPOSITORY_ERROR_TYPES.AUTH, "Supabase client is unavailable.");
+    return supabaseClient.storage.from(STORAGE_ATTACHMENTS_BUCKET);
+  }
+
+  async function readOwnedVisit(visitId, patientId = null) {
+    const query = selectVisitColumns(from("visits")).eq("id", visitId);
+    const { data, error } = await (patientId ? query.eq("patient_id", patientId) : query).maybeSingle();
+    if (error) throwRepositoryError(error, "Unable to read visit.");
+    if (!data) throw new RepositoryError(REPOSITORY_ERROR_TYPES.PERMISSION, "Visit is not available for the current doctor.");
+    return mapVisitRow(data);
+  }
+
+  async function readAttachmentMetadata(id) {
+    const { data, error } = await selectAttachmentColumns(from("attachments")).eq("id", id).maybeSingle();
+    if (error) throwRepositoryError(error, "Unable to read attachment.");
+    if (!data) throw new RepositoryError(REPOSITORY_ERROR_TYPES.PERMISSION, "Attachment is not available for the current doctor.");
+    return mapAttachmentMetadataRow(data);
   }
 
   return {
@@ -623,12 +677,6 @@ const supabaseRepository = (() => {
     },
     async createVisit(patientId, input = {}, files = []) {
       const session = await requireSupabaseSession();
-      if (hasUploadedFiles(files)) {
-        throw new RepositoryError(
-          REPOSITORY_ERROR_TYPES.CONFLICT,
-          "Cloud visit attachments require the Storage foundation before they can be saved."
-        );
-      }
       const visitInput = {
         ...input,
         status: input.status || "completed",
@@ -639,7 +687,26 @@ const supabaseRepository = (() => {
         .select(VISIT_SELECT_COLUMNS)
         .single();
       if (error) throwRepositoryError(error, "Unable to create visit.");
-      return mapVisitRow(data);
+      const visit = mapVisitRow(data);
+      const savedAttachments = [];
+      try {
+        for (const file of Array.from(files || [])) savedAttachments.push(await this.addAttachment(patientId, visit.id, file));
+      } catch (attachmentError) {
+        for (const attachment of savedAttachments.reverse()) {
+          try {
+            await this.removeAttachment(attachment.id);
+          } catch {
+            // Preserve the original attachment error; cleanup failures are recoverable by cloud audit.
+          }
+        }
+        try {
+          await from("visits").delete().eq("id", visit.id);
+        } catch {
+          // Preserve the original attachment error; created-visit cleanup can be retried through cloud audit.
+        }
+        throw attachmentError;
+      }
+      return visit;
     },
     async getOrCreateDraftVisit(patientId) {
       const session = await requireSupabaseSession();
@@ -707,6 +774,54 @@ const supabaseRepository = (() => {
       const { data, error } = await query.order("added_at", { ascending: false });
       if (error) throwRepositoryError(error, "Unable to read attachments.");
       return (data || []).map(mapAttachmentMetadataRow);
+    },
+    async addAttachment(patientId, visitId, file = {}) {
+      const session = await requireSupabaseSession();
+      const doctorId = session.user.id;
+      await readOwnedVisit(visitId, patientId);
+      const attachmentId = uid();
+      const body = attachmentUploadBody(file);
+      const size = validateAttachmentFile(file, body);
+      const payload = mapAttachmentMetadataInputToSupabasePayload(
+        {
+          ...file,
+          size,
+          mime: file.mime || file.type || body.type || "application/octet-stream"
+        },
+        { doctorId, patientId, visitId, attachmentId }
+      );
+      const { error: uploadError } = await attachmentBucket().upload(payload.storage_path, body, {
+        cacheControl: "3600",
+        contentType: payload.mime_type,
+        upsert: false
+      });
+      if (uploadError) throwRepositoryError(uploadError, "Unable to upload attachment.");
+      const { data, error } = await from("attachments").insert(payload).select(ATTACHMENT_SELECT_COLUMNS).single();
+      if (error) {
+        try {
+          await attachmentBucket().remove([payload.storage_path]);
+        } catch {
+          // The metadata insert error remains authoritative; the failed cleanup is recoverable by storage audit.
+        }
+        throwRepositoryError(error, "Unable to save attachment metadata.");
+      }
+      return mapAttachmentMetadataRow(data);
+    },
+    async getAttachmentSignedUrl(id, expiresIn = SIGNED_ATTACHMENT_URL_TTL_SECONDS) {
+      await requireSupabaseSession();
+      const attachment = await readAttachmentMetadata(id);
+      const { data, error } = await attachmentBucket().createSignedUrl(attachment.storagePath, expiresIn);
+      if (error) throwRepositoryError(error, "Unable to create attachment access URL.");
+      return data.signedUrl;
+    },
+    async removeAttachment(id) {
+      await requireSupabaseSession();
+      const attachment = await readAttachmentMetadata(id);
+      const { error: removeError } = await attachmentBucket().remove([attachment.storagePath]);
+      if (removeError) throwRepositoryError(removeError, "Unable to remove attachment object.");
+      const { error } = await from("attachments").delete().eq("id", id);
+      if (error) throwRepositoryError(error, "Unable to remove attachment metadata.");
+      return attachment;
     }
   };
 })();
