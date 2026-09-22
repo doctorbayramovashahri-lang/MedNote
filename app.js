@@ -6,6 +6,14 @@ const SUPABASE_URL = "https://ddnhkwpdxcrvkfopkpmy.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2ZpBanYunxaZRXnPPkN08Q_gjGKjjK0";
 const AUTH_TECHNICAL_DOMAIN = "mednote.local";
 const LOGIN_PATTERN = /^[a-z0-9._-]+$/;
+const STORAGE_ATTACHMENTS_BUCKET = "mednote-attachments";
+const REPOSITORY_ERROR_TYPES = {
+  AUTH: "AUTH",
+  NETWORK: "NETWORK",
+  PERMISSION: "PERMISSION",
+  CONFLICT: "CONFLICT",
+  UNKNOWN: "UNKNOWN"
+};
 
 const app = document.querySelector("#app");
 const logoutButton = document.querySelector("#logoutButton");
@@ -116,6 +124,212 @@ function normalizePatient(patient) {
     },
     weightHistory: Array.isArray(patient.weightHistory) ? patient.weightHistory : []
   };
+}
+
+class RepositoryError extends Error {
+  constructor(type, message, cause = null) {
+    super(message);
+    this.name = "RepositoryError";
+    this.type = type;
+    this.cause = cause;
+  }
+}
+
+function classifySupabaseError(error) {
+  if (!error) return REPOSITORY_ERROR_TYPES.UNKNOWN;
+  const status = error.status || error.statusCode;
+  const code = error.code || "";
+  const message = `${error.message || ""}`.toLowerCase();
+  if (status === 401 || message.includes("jwt") || message.includes("session")) return REPOSITORY_ERROR_TYPES.AUTH;
+  if (status === 403 || code === "42501" || message.includes("permission") || message.includes("rls")) {
+    return REPOSITORY_ERROR_TYPES.PERMISSION;
+  }
+  if (status === 409 || code === "23505" || code === "PGRST116") return REPOSITORY_ERROR_TYPES.CONFLICT;
+  if (message.includes("failed to fetch") || message.includes("network") || message.includes("fetch")) {
+    return REPOSITORY_ERROR_TYPES.NETWORK;
+  }
+  return REPOSITORY_ERROR_TYPES.UNKNOWN;
+}
+
+function throwRepositoryError(error, fallbackMessage = "Repository operation failed.") {
+  throw new RepositoryError(classifySupabaseError(error), fallbackMessage, error);
+}
+
+function optionalText(value) {
+  return value == null ? "" : String(value);
+}
+
+function optionalNumericText(value) {
+  return value == null ? "" : String(value);
+}
+
+function nullableText(value) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function nullableNumber(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function safeStorageFilename(filename = "") {
+  const normalized = String(filename || "attachment")
+    .trim()
+    .replace(/[\\/:*?"<>|#%{}^~[\]`]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return normalized || "attachment";
+}
+
+function storagePathForAttachment({ doctorId, patientId, visitId, attachmentId, filename }) {
+  return [doctorId, patientId, visitId, attachmentId, safeStorageFilename(filename)].map(encodeURIComponent).join("/");
+}
+
+function mapPatientWeightRow(row = {}) {
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    valueKg: optionalNumericText(row.value_kg),
+    measuredAt: optionalText(row.measured_at),
+    createdAt: optionalText(row.created_at),
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function mapPatientRow(row = {}, weightRows = []) {
+  return normalizePatient({
+    id: row.id,
+    fullName: optionalText(row.full_name),
+    birthDate: optionalText(row.birth_date),
+    sex: row.sex || "",
+    phone: row.phone || "",
+    email: row.email || "",
+    heightCm: optionalNumericText(row.height_cm),
+    weightHistory: weightRows.map(mapPatientWeightRow),
+    medicalContext: {
+      allergies: row.allergies || "",
+      conditions: row.conditions || "",
+      therapy: row.therapy || "",
+      notes: row.context_notes || ""
+    },
+    about: row.about || "",
+    createdAt: optionalText(row.created_at),
+    updatedAt: optionalText(row.updated_at)
+  });
+}
+
+function mapPatientInputToSupabasePayload(input = {}, doctorId) {
+  return {
+    doctor_id: doctorId,
+    full_name: String(input.fullName || "").trim(),
+    birth_date: input.birthDate || null,
+    sex: nullableText(input.sex),
+    phone: nullableText(input.phone),
+    email: nullableText(input.email),
+    height_cm: nullableNumber(input.heightCm),
+    allergies: nullableText(input.medicalContext?.allergies),
+    conditions: nullableText(input.medicalContext?.conditions),
+    therapy: nullableText(input.medicalContext?.therapy),
+    context_notes: nullableText(input.medicalContext?.notes),
+    about: nullableText(input.about)
+  };
+}
+
+function mapWeightInputToSupabasePayload(input = {}, patientId, doctorId) {
+  return {
+    doctor_id: doctorId,
+    patient_id: patientId,
+    value_kg: nullableNumber(input.valueKg),
+    measured_at: input.measuredAt || null
+  };
+}
+
+function mapVisitRow(row = {}) {
+  return normalizeVisit({
+    id: row.id,
+    patientId: row.patient_id,
+    date: optionalText(row.date),
+    format: row.format || "clinic",
+    status: row.status || "draft",
+    note: row.note || "",
+    decision: row.decision || "",
+    nextStep: row.next_step || "",
+    nextStepTiming: row.next_step_timing || "",
+    startedAt: optionalText(row.started_at || row.created_at),
+    completedAt: row.completed_at || "",
+    createdAt: optionalText(row.created_at),
+    updatedAt: optionalText(row.updated_at),
+    version: row.version || 1
+  });
+}
+
+function mapVisitInputToSupabasePayload(input = {}, patientId, doctorId) {
+  return {
+    doctor_id: doctorId,
+    patient_id: patientId,
+    date: input.date || todayISO(),
+    format: input.format || "clinic",
+    status: input.status || "draft",
+    note: input.note || "",
+    decision: input.decision || "",
+    next_step: input.nextStep || "",
+    next_step_timing: input.nextStepTiming || "",
+    started_at: input.startedAt || nowISO(),
+    completed_at: input.completedAt || null
+  };
+}
+
+function mapAttachmentMetadataRow(row = {}) {
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    visitId: row.visit_id,
+    kind: row.kind,
+    name: row.original_filename,
+    mime: row.mime_type,
+    size: Number(row.size_bytes || 0),
+    addedAt: optionalText(row.added_at),
+    createdAt: optionalText(row.created_at),
+    storageBucket: row.storage_bucket,
+    storagePath: row.storage_path,
+    hasBinaryUrl: false
+  };
+}
+
+function mapAttachmentMetadataInputToSupabasePayload(input = {}, { doctorId, patientId, visitId, attachmentId }) {
+  return {
+    id: attachmentId,
+    doctor_id: doctorId,
+    patient_id: patientId,
+    visit_id: visitId,
+    kind: input.kind || "document",
+    original_filename: input.name || "attachment",
+    mime_type: input.mime || "application/octet-stream",
+    size_bytes: Number(input.size || 0),
+    storage_bucket: STORAGE_ATTACHMENTS_BUCKET,
+    storage_path: storagePathForAttachment({ doctorId, patientId, visitId, attachmentId, filename: input.name })
+  };
+}
+
+function groupRowsBy(rows = [], key) {
+  return rows.reduce((groups, row) => {
+    const value = row[key];
+    if (!groups.has(value)) groups.set(value, []);
+    groups.get(value).push(row);
+    return groups;
+  }, new Map());
+}
+
+async function requireSupabaseSession() {
+  if (!supabaseClient) throw new RepositoryError(REPOSITORY_ERROR_TYPES.AUTH, "Supabase client is unavailable.");
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) throwRepositoryError(error, "Unable to read Supabase session.");
+  if (!data.session?.user?.id) throw new RepositoryError(REPOSITORY_ERROR_TYPES.AUTH, "Authenticated Supabase session is required.");
+  return data.session;
 }
 
 function normalizeState(state) {
@@ -229,6 +443,91 @@ function demoState() {
     attachments: [a1, a2, a3]
   };
 }
+
+const supabaseRepository = (() => {
+  function from(table) {
+    if (!supabaseClient) throw new RepositoryError(REPOSITORY_ERROR_TYPES.AUTH, "Supabase client is unavailable.");
+    return supabaseClient.from(table);
+  }
+
+  async function readPatientWeights(patientIds) {
+    if (!patientIds.length) return [];
+    const { data, error } = await from("patient_weights")
+      .select("id, patient_id, value_kg, measured_at, created_at, updated_at")
+      .in("patient_id", patientIds)
+      .order("measured_at", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throwRepositoryError(error, "Unable to read patient weights.");
+    return data || [];
+  }
+
+  async function readPatientsWithWeights(patientQuery) {
+    await requireSupabaseSession();
+    const { data: patients, error } = await patientQuery;
+    if (error) throwRepositoryError(error, "Unable to read patients.");
+    const rows = patients || [];
+    const weights = await readPatientWeights(rows.map((patient) => patient.id));
+    const weightsByPatient = groupRowsBy(weights, "patient_id");
+    return rows.map((patient) => mapPatientRow(patient, weightsByPatient.get(patient.id) || []));
+  }
+
+  function selectPatientColumns(query) {
+    return query.select(
+      "id, full_name, birth_date, sex, phone, email, height_cm, allergies, conditions, therapy, context_notes, about, created_at, updated_at"
+    );
+  }
+
+  function selectVisitColumns(query) {
+    return query.select(
+      "id, patient_id, date, format, status, note, decision, next_step, next_step_timing, started_at, completed_at, created_at, updated_at, version"
+    );
+  }
+
+  function orderVisitsClinically(query) {
+    return query
+      .order("date", { ascending: false })
+      .order("completed_at", { ascending: false, nullsFirst: false })
+      .order("started_at", { ascending: false })
+      .order("created_at", { ascending: false });
+  }
+
+  function selectAttachmentColumns(query) {
+    return query.select(
+      "id, patient_id, visit_id, kind, original_filename, mime_type, size_bytes, storage_bucket, storage_path, added_at, created_at"
+    );
+  }
+
+  return {
+    async getPatients() {
+      return readPatientsWithWeights(selectPatientColumns(from("patients")));
+    },
+    async getPatient(id) {
+      const patients = await readPatientsWithWeights(selectPatientColumns(from("patients")).eq("id", id));
+      return patients[0] || null;
+    },
+    async getVisits(patientId) {
+      await requireSupabaseSession();
+      const query = orderVisitsClinically(selectVisitColumns(from("visits")).eq("patient_id", patientId));
+      const { data, error } = await query;
+      if (error) throwRepositoryError(error, "Unable to read visits.");
+      return (data || []).map(mapVisitRow);
+    },
+    async getVisit(id) {
+      await requireSupabaseSession();
+      const { data, error } = await selectVisitColumns(from("visits")).eq("id", id).maybeSingle();
+      if (error) throwRepositoryError(error, "Unable to read visit.");
+      return data ? mapVisitRow(data) : null;
+    },
+    async getAttachments(patientId, visitId = null) {
+      await requireSupabaseSession();
+      let query = selectAttachmentColumns(from("attachments")).eq("patient_id", patientId);
+      if (visitId) query = query.eq("visit_id", visitId);
+      const { data, error } = await query.order("added_at", { ascending: false });
+      if (error) throwRepositoryError(error, "Unable to read attachments.");
+      return (data || []).map(mapAttachmentMetadataRow);
+    }
+  };
+})();
 
 const dbRepository = (() => {
   let dbPromise;

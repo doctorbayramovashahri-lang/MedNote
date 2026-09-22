@@ -1,12 +1,12 @@
 # MedNote Supabase Repository Contract
 
-Status: planning contract for the future Supabase repository. The current app still uses `dbRepository` backed by IndexedDB.
+Status: foundation contract for the future Supabase repository. The current production app still uses `dbRepository` backed by IndexedDB.
 
 ## Current UI Contract
 
 The UI currently expects one repository object with asynchronous methods:
 
-- `getPatients()`: returns normalized patient objects sorted by UI code.
+- `getPatients()`: returns normalized patient objects. Patient search/list sorting currently belongs to the UI code, not to the repository contract.
 - `getPatient(id)`: returns one patient or `null`.
 - `createPatient(input)`: creates a patient and optional initial weight history item, then returns the saved patient.
 - `updatePatient(id, input)`: updates patient fields and appends a new weight history item when weight/date changed, then returns the saved patient.
@@ -28,6 +28,78 @@ All methods are already `async`, so a cloud repository can preserve the external
 - Draft acquisition can keep `getOrCreateDraftVisit(patientId)` and translate a database unique-conflict into a second read.
 - Attachment methods can keep the same names, but their return shape needs adaptation because Supabase Storage should not store Data URLs in table rows.
 - The repository should derive `doctor_id` from the authenticated Supabase session and never require UI callers to pass it.
+
+## Supabase Repository Foundation
+
+The app now contains a parallel read-only `supabaseRepository` implementation for the existing cloud schema. It is not connected to the production UI path yet.
+
+Current production path:
+
+```text
+UI -> dbRepository -> IndexedDB
+```
+
+Prepared cloud path:
+
+```text
+UI -> repository contract -> supabaseRepository -> Supabase
+```
+
+The cloud foundation implements read methods only:
+
+- `getPatients()`
+- `getPatient(id)`
+- `getVisits(patientId)`
+- `getVisit(id)`
+- `getAttachments(patientId, visitId = null)`
+
+It also includes centralized mapping helpers for patients, patient weights, visits, and attachment metadata so snake_case/camelCase conversion does not leak into UI code.
+
+## Cloud Mapping Rules
+
+Patient rows map from cloud columns to the existing UI model:
+
+- `full_name` -> `fullName`
+- `birth_date` -> `birthDate`
+- `height_cm` -> `heightCm`
+- `allergies`, `conditions`, `therapy`, `context_notes` -> `medicalContext`
+- `created_at`, `updated_at` -> `createdAt`, `updatedAt`
+
+`patient_weights` rows are collected back into `patient.weightHistory[]` so the current UI weight contract remains unchanged.
+
+Visit rows map into the existing visit model and may additionally carry:
+
+- `completedAt`
+- `version`
+
+Cloud visit reads use clinical ordering:
+
+```text
+date DESC
+completed_at DESC NULLS LAST
+started_at DESC
+created_at DESC
+```
+
+Attachment rows currently map metadata only:
+
+- `original_filename` -> `name`
+- `mime_type` -> `mime`
+- `size_bytes` -> `size`
+- `storage_bucket` -> `storageBucket`
+- `storage_path` -> `storagePath`
+
+Cloud attachment metadata does not fabricate `dataUrl`. UI work is still required before attachments can switch to Supabase Storage.
+
+## Storage Path Contract
+
+Future Supabase Storage objects should use this canonical private path shape:
+
+```text
+{doctor_id}/{patient_id}/{visit_id}/{attachment_id}/{safe-filename}
+```
+
+The attachment id is intentionally its own path segment. Storage bucket creation, Storage policies, upload/download, and signed URLs are out of scope for the current foundation slice.
 
 ## IndexedDB Assumptions Leaking Into UI
 
@@ -85,6 +157,20 @@ The cloud repository should:
 - set `doctor_id = session.user.id` for inserts;
 - rely on RLS as the final enforcement layer;
 - never accept `doctor_id` from UI input.
+
+Current foundation reads require an authenticated Supabase session before querying medical tables. If no session is available, repository operations fail with a classified `AUTH` repository error.
+
+## Repository Error Contract
+
+Repository errors are classified into:
+
+- `AUTH`
+- `NETWORK`
+- `PERMISSION`
+- `CONFLICT`
+- `UNKNOWN`
+
+The current read foundation primarily uses `AUTH`, `NETWORK`, `PERMISSION`, and `UNKNOWN`. `CONFLICT` is reserved for later cloud write/versioning work.
 
 ## Visits Versioning
 
