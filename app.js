@@ -9,6 +9,8 @@ const LOGIN_PATTERN = /^[a-z0-9._-]+$/;
 const STORAGE_ATTACHMENTS_BUCKET = "mednote-attachments";
 const PATIENT_SELECT_COLUMNS =
   "id, full_name, birth_date, sex, phone, email, height_cm, allergies, conditions, therapy, context_notes, about, created_at, updated_at";
+const VISIT_SELECT_COLUMNS =
+  "id, patient_id, date, format, status, note, decision, next_step, next_step_timing, started_at, completed_at, created_at, updated_at, version";
 const REPOSITORY_ERROR_TYPES = {
   AUTH: "AUTH",
   NETWORK: "NETWORK",
@@ -309,6 +311,33 @@ function mapVisitInputToSupabasePayload(input = {}, patientId, doctorId) {
   };
 }
 
+function mapVisitUpdateInputToSupabasePayload(input = {}) {
+  const payload = {};
+  if ("date" in input) payload.date = input.date || todayISO();
+  if ("format" in input) payload.format = input.format || "clinic";
+  if ("status" in input) payload.status = input.status || "draft";
+  if ("note" in input) payload.note = input.note || "";
+  if ("decision" in input) payload.decision = input.decision || "";
+  if ("nextStep" in input) payload.next_step = input.nextStep || "";
+  if ("nextStepTiming" in input) payload.next_step_timing = input.nextStepTiming || "";
+  if ("startedAt" in input) payload.started_at = input.startedAt || nowISO();
+  if ("completedAt" in input) payload.completed_at = input.completedAt || null;
+  if (payload.status === "completed" && !payload.completed_at) payload.completed_at = nowISO();
+  return payload;
+}
+
+function visitExpectedVersion(input = {}) {
+  const version = Number(input.expectedVersion ?? input.version);
+  if (!Number.isInteger(version) || version < 1) {
+    throw new RepositoryError(REPOSITORY_ERROR_TYPES.CONFLICT, "Current visit version is required for cloud update.");
+  }
+  return version;
+}
+
+function hasUploadedFiles(files) {
+  return Boolean(files && typeof files.length === "number" && files.length > 0);
+}
+
 function mapAttachmentMetadataRow(row = {}) {
   return {
     id: row.id,
@@ -510,9 +539,7 @@ const supabaseRepository = (() => {
   }
 
   function selectVisitColumns(query) {
-    return query.select(
-      "id, patient_id, date, format, status, note, decision, next_step, next_step_timing, started_at, completed_at, created_at, updated_at, version"
-    );
+    return query.select(VISIT_SELECT_COLUMNS);
   }
 
   function orderVisitsClinically(query) {
@@ -592,6 +619,85 @@ const supabaseRepository = (() => {
       const { data, error } = await selectVisitColumns(from("visits")).eq("id", id).maybeSingle();
       if (error) throwRepositoryError(error, "Unable to read visit.");
       return data ? mapVisitRow(data) : null;
+    },
+    async createVisit(patientId, input = {}, files = []) {
+      const session = await requireSupabaseSession();
+      if (hasUploadedFiles(files)) {
+        throw new RepositoryError(
+          REPOSITORY_ERROR_TYPES.CONFLICT,
+          "Cloud visit attachments require the Storage foundation before they can be saved."
+        );
+      }
+      const visitInput = {
+        ...input,
+        status: input.status || "completed",
+        completedAt: input.completedAt || (input.status === "draft" ? null : nowISO())
+      };
+      const { data, error } = await from("visits")
+        .insert(mapVisitInputToSupabasePayload(visitInput, patientId, session.user.id))
+        .select(VISIT_SELECT_COLUMNS)
+        .single();
+      if (error) throwRepositoryError(error, "Unable to create visit.");
+      return mapVisitRow(data);
+    },
+    async getOrCreateDraftVisit(patientId) {
+      const session = await requireSupabaseSession();
+      const readDraft = async () => {
+        const { data, error } = await selectVisitColumns(from("visits"))
+          .eq("patient_id", patientId)
+          .eq("status", "draft")
+          .maybeSingle();
+        if (error) throwRepositoryError(error, "Unable to read draft visit.");
+        return data ? mapVisitRow(data) : null;
+      };
+      const existingDraft = await readDraft();
+      if (existingDraft) return existingDraft;
+      const { data, error } = await from("visits")
+        .insert(
+          mapVisitInputToSupabasePayload(
+            {
+              date: todayISO(),
+              format: "clinic",
+              status: "draft",
+              note: "",
+              decision: "",
+              nextStep: "",
+              nextStepTiming: "",
+              startedAt: nowISO(),
+              completedAt: null
+            },
+            patientId,
+            session.user.id
+          )
+        )
+        .select(VISIT_SELECT_COLUMNS)
+        .single();
+      if (!error) return mapVisitRow(data);
+      if (classifySupabaseError(error) === REPOSITORY_ERROR_TYPES.CONFLICT) {
+        const racedDraft = await readDraft();
+        if (racedDraft) return racedDraft;
+      }
+      throwRepositoryError(error, "Unable to create draft visit.");
+    },
+    async updateVisit(id, input = {}) {
+      const session = await requireSupabaseSession();
+      const expectedVersion = visitExpectedVersion(input);
+      const payload = {
+        ...mapVisitUpdateInputToSupabasePayload(input),
+        version: expectedVersion + 1
+      };
+      delete payload.expectedVersion;
+      const { data, error } = await from("visits")
+        .update(payload)
+        .eq("id", id)
+        .eq("doctor_id", session.user.id)
+        .eq("version", expectedVersion)
+        .select(VISIT_SELECT_COLUMNS);
+      if (error) throwRepositoryError(error, "Unable to update visit.");
+      if (!data?.length) {
+        throw new RepositoryError(REPOSITORY_ERROR_TYPES.CONFLICT, "Visit was changed by another session.");
+      }
+      return mapVisitRow(data[0]);
     },
     async getAttachments(patientId, visitId = null) {
       await requireSupabaseSession();

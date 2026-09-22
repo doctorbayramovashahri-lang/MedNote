@@ -58,6 +58,12 @@ It also implements cloud patient write methods, still not connected to the produ
 - `createPatient(input)`
 - `updatePatient(id, input)`
 
+It also implements cloud visit write foundation methods, still not connected to the production UI:
+
+- `createVisit(patientId, input, files = [])`
+- `getOrCreateDraftVisit(patientId)`
+- `updateVisit(id, input)`
+
 It also includes centralized mapping helpers for patients, patient weights, visits, and attachment metadata so snake_case/camelCase conversion does not leak into UI code.
 
 ## Cloud Mapping Rules
@@ -190,13 +196,27 @@ Repository errors are classified into:
 
 The current read foundation primarily uses `AUTH`, `NETWORK`, `PERMISSION`, and `UNKNOWN`. `CONFLICT` is reserved for later cloud write/versioning work.
 
+Cloud visit writes now use `CONFLICT` for stale optimistic updates, missing version input for a cloud update, unique-draft races that cannot be resolved by rereading, and attachment writes attempted before the Storage foundation exists.
+
+## Cloud Visit Write Behavior
+
+`createVisit(patientId, input, files = [])` creates a cloud visit for the authenticated doctor and sets `doctor_id` from the Supabase session only. The method does not accept ownership fields from UI input.
+
+Storage is not configured yet. If `files` contains any uploaded item, the method fails with a controlled repository error instead of silently ignoring files, saving local attachments, or creating fake attachment metadata. When `files` is empty, the visit row can be inserted and is returned as a normalized Visit.
+
+`getOrCreateDraftVisit(patientId)` preserves the current UI contract while relying on the database invariant that only one draft may exist for `(doctor_id, patient_id)`. It first reads an existing draft. If none exists, it inserts a draft. If a concurrent insert wins the partial unique index race, it rereads the draft and returns that row.
+
+`updateVisit(id, input)` is optimistic and requires the caller to provide the current visit version as `input.expectedVersion` or `input.version`. It updates only when the visit id, authenticated doctor, and expected version all match. On success it writes `version = expectedVersion + 1` and returns the normalized updated Visit. If no row is updated, the method reports `CONFLICT` instead of retrying or overwriting medical text.
+
+When a visit is completed through `updateVisit()`, `status` becomes `completed` and `completed_at` is set when the caller did not provide an explicit value. Version semantics still apply. A completed visit no longer matches the draft query, so a later `getOrCreateDraftVisit(patientId)` can create a new draft.
+
 ## Visits Versioning
 
-`visits.version` is the optimistic concurrency foundation. Future `updateVisit(id, input)` should:
+`visits.version` is the optimistic concurrency foundation. Cloud `updateVisit(id, input)` now:
 
-- read or receive the current `version`;
-- update with a condition like `id = id and version = expectedVersion`;
-- increment `version` on success;
+- receives the current `version` as `input.expectedVersion` or `input.version`;
+- updates with `id`, authenticated `doctor_id`, and `version = expectedVersion`;
+- writes `version = expectedVersion + 1` on success;
 - return the updated visit including the new version;
 - report a conflict distinctly so encounter autosave can reload or show a non-destructive conflict state.
 
@@ -204,7 +224,7 @@ The current UI does not pass an expected version, so the encounter workspace nee
 
 ## Draft Conflict Handling
 
-The database enforces one draft per `doctor_id + patient_id`. Future `getOrCreateDraftVisit(patientId)` should:
+The database enforces one draft per `doctor_id + patient_id`. Cloud `getOrCreateDraftVisit(patientId)` now:
 
 1. query for an existing draft;
 2. if absent, try to insert one;
