@@ -7,6 +7,8 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_2ZpBanYunxaZRXnPPkN08Q_gjGKjjK0
 const AUTH_TECHNICAL_DOMAIN = "mednote.local";
 const LOGIN_PATTERN = /^[a-z0-9._-]+$/;
 const STORAGE_ATTACHMENTS_BUCKET = "mednote-attachments";
+const PATIENT_SELECT_COLUMNS =
+  "id, full_name, birth_date, sex, phone, email, height_cm, allergies, conditions, therapy, context_notes, about, created_at, updated_at";
 const REPOSITORY_ERROR_TYPES = {
   AUTH: "AUTH",
   NETWORK: "NETWORK",
@@ -239,6 +241,30 @@ function mapPatientInputToSupabasePayload(input = {}, doctorId) {
   };
 }
 
+function mapPatientUpdateInputToSupabasePayload(input = {}) {
+  const payload = {};
+  if ("fullName" in input) payload.full_name = String(input.fullName || "").trim();
+  if ("birthDate" in input) payload.birth_date = input.birthDate || null;
+  if ("sex" in input) payload.sex = nullableText(input.sex);
+  if ("phone" in input) payload.phone = nullableText(input.phone);
+  if ("email" in input) payload.email = nullableText(input.email);
+  if ("heightCm" in input) payload.height_cm = nullableNumber(input.heightCm);
+  if ("medicalContext" in input) {
+    payload.allergies = nullableText(input.medicalContext?.allergies);
+    payload.conditions = nullableText(input.medicalContext?.conditions);
+    payload.therapy = nullableText(input.medicalContext?.therapy);
+    payload.context_notes = nullableText(input.medicalContext?.notes);
+  }
+  if ("about" in input) payload.about = nullableText(input.about);
+  return payload;
+}
+
+function weightInputFromPatientForm(input = {}) {
+  const valueKg = String(input.currentWeightKg || "").trim();
+  const measuredAt = String(input.weightMeasuredAt || "").trim();
+  return valueKg && measuredAt ? { valueKg, measuredAt } : null;
+}
+
 function mapWeightInputToSupabasePayload(input = {}, patientId, doctorId) {
   return {
     doctor_id: doctorId,
@@ -461,6 +487,14 @@ const supabaseRepository = (() => {
     return data || [];
   }
 
+  async function insertPatientWeight(patientId, doctorId, weightInput) {
+    const payload = mapWeightInputToSupabasePayload(weightInput, patientId, doctorId);
+    if (!payload.value_kg || !payload.measured_at) return null;
+    const { error } = await from("patient_weights").insert(payload);
+    if (error) throwRepositoryError(error, "Unable to save patient weight.");
+    return payload;
+  }
+
   async function readPatientsWithWeights(patientQuery) {
     await requireSupabaseSession();
     const { data: patients, error } = await patientQuery;
@@ -472,9 +506,7 @@ const supabaseRepository = (() => {
   }
 
   function selectPatientColumns(query) {
-    return query.select(
-      "id, full_name, birth_date, sex, phone, email, height_cm, allergies, conditions, therapy, context_notes, about, created_at, updated_at"
-    );
+    return query.select(PATIENT_SELECT_COLUMNS);
   }
 
   function selectVisitColumns(query) {
@@ -504,6 +536,49 @@ const supabaseRepository = (() => {
     async getPatient(id) {
       const patients = await readPatientsWithWeights(selectPatientColumns(from("patients")).eq("id", id));
       return patients[0] || null;
+    },
+    async createPatient(input) {
+      const session = await requireSupabaseSession();
+      const doctorId = session.user.id;
+      const { data: patient, error } = await from("patients")
+        .insert(mapPatientInputToSupabasePayload(input, doctorId))
+        .select(PATIENT_SELECT_COLUMNS)
+        .single();
+      if (error) throwRepositoryError(error, "Unable to create patient.");
+      const weightInput = weightInputFromPatientForm(input);
+      if (weightInput) {
+        try {
+          await insertPatientWeight(patient.id, doctorId, weightInput);
+        } catch (error) {
+          try {
+            await from("patients").delete().eq("id", patient.id);
+          } catch {
+            // The original weight error is the operation result; cleanup failure is a residual risk.
+          }
+          throw error;
+        }
+      }
+      return this.getPatient(patient.id);
+    },
+    async updatePatient(id, input) {
+      const session = await requireSupabaseSession();
+      const doctorId = session.user.id;
+      const currentPatient = await this.getPatient(id);
+      if (!currentPatient) throw new RepositoryError(REPOSITORY_ERROR_TYPES.PERMISSION, "Patient is not available for the current doctor.");
+      const payload = mapPatientUpdateInputToSupabasePayload(input);
+      if (Object.keys(payload).length) {
+        const { error } = await from("patients").update(payload).eq("id", id);
+        if (error) throwRepositoryError(error, "Unable to update patient.");
+      }
+      const weightInput = weightInputFromPatientForm(input);
+      const currentWeight = latestWeight(currentPatient);
+      if (
+        weightInput &&
+        (!currentWeight || currentWeight.valueKg !== weightInput.valueKg || currentWeight.measuredAt !== weightInput.measuredAt)
+      ) {
+        await insertPatientWeight(id, doctorId, weightInput);
+      }
+      return this.getPatient(id);
     },
     async getVisits(patientId) {
       await requireSupabaseSession();

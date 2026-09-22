@@ -53,6 +53,11 @@ The cloud foundation implements read methods only:
 - `getVisit(id)`
 - `getAttachments(patientId, visitId = null)`
 
+It also implements cloud patient write methods, still not connected to the production UI:
+
+- `createPatient(input)`
+- `updatePatient(id, input)`
+
 It also includes centralized mapping helpers for patients, patient weights, visits, and attachment metadata so snake_case/camelCase conversion does not leak into UI code.
 
 ## Cloud Mapping Rules
@@ -159,6 +164,19 @@ The cloud repository should:
 - never accept `doctor_id` from UI input.
 
 Current foundation reads require an authenticated Supabase session before querying medical tables. If no session is available, repository operations fail with a classified `AUTH` repository error.
+
+Cloud patient writes also require an authenticated Supabase session. Insert payloads set `doctor_id` from `session.user.id`; update payloads never include `doctor_id`, so UI input cannot reassign ownership. RLS remains the final security boundary.
+
+## Patient Write Behavior
+
+`createPatient(input)` inserts a row into `patients`, optionally inserts one initial `patient_weights` row when the current form input contains both `currentWeightKg` and `weightMeasuredAt`, then returns the normalized patient model by reading it back through `getPatient(id)`.
+
+`updatePatient(id, input)` first verifies that the current doctor can read the patient. It updates only patient fields represented by the current patient form contract and never overwrites ownership. If the form contains a weight value/date pair, it reads the latest existing weight and inserts a new `patient_weights` row only when the value or measurement date differs from that latest weight. Existing weight history is not destructively replaced.
+
+Current partial failure semantics:
+
+- if patient creation succeeds but initial weight insert fails, the repository attempts to delete the just-created patient row and then reports the original weight failure;
+- if patient update succeeds but a later new-weight insert fails, the patient update may remain saved while the repository reports failure. A transactional RPC can tighten this later if the product needs all-or-nothing patient update plus weight insert.
 
 ## Repository Error Contract
 
