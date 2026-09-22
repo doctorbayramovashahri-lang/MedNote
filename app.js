@@ -101,7 +101,8 @@ function normalizeVisit(visit) {
     decision: visit.decision || "",
     nextStep: visit.nextStep || "",
     nextStepTiming: visit.nextStepTiming || "",
-    startedAt: visit.startedAt || visit.createdAt || nowISO()
+    startedAt: visit.startedAt || visit.createdAt || nowISO(),
+    version: Number.isInteger(Number(visit.version)) && Number(visit.version) > 0 ? Number(visit.version) : 1
   };
 }
 
@@ -840,10 +841,22 @@ const dbRepository = (() => {
       return draft;
     },
     async updateVisit(id, input) {
+      let savedVisit = null;
+      const { expectedVersion, ...visitInput } = input;
       await mutate((state) => ({
         ...state,
-        visits: state.visits.map((visit) => (visit.id === id ? normalizeVisit({ ...visit, ...input, updatedAt: nowISO() }) : visit))
+        visits: state.visits.map((visit) => {
+          if (visit.id !== id) return visit;
+          savedVisit = normalizeVisit({
+            ...visit,
+            ...visitInput,
+            version: Number(visit.version || 1) + 1,
+            updatedAt: nowISO()
+          });
+          return savedVisit;
+        })
       }));
+      return savedVisit;
     },
     async addAttachment(patientId, visitId, file) {
       const attachment = { ...file, id: uid(), patientId, visitId, addedAt: nowISO() };
@@ -1606,7 +1619,7 @@ function visitForm(patientId, visit = null) {
     node.querySelectorAll(".error").forEach((item) => (item.textContent = ""));
     if (!inputValue.date) return (node.querySelector('[data-error="date"]').textContent = "Укажите дату");
     if (!inputValue.note) return (node.querySelector('[data-error="note"]').textContent = "Добавьте текст осмотра или заметку");
-    if (isEdit) await dbRepository.updateVisit(visit.id, inputValue);
+    if (isEdit) await dbRepository.updateVisit(visit.id, { ...inputValue, expectedVersion: normalizeVisit(visit).version });
     else await dbRepository.createVisit(patientId, inputValue, files);
     node.remove();
     await route(`#/patient/${patientId}`);
@@ -1728,7 +1741,10 @@ function bindPatientFormButtons(root) {
 function bindEncounterWorkspace(patientId, visitId) {
   const saveState = document.querySelector("[data-save-state]");
   const contextDetails = document.querySelector(".encounter-context details");
+  let currentVisit = normalizeVisit(state.visits.find((item) => item.id === visitId) || {});
   let saveTimer = null;
+  let saveChain = Promise.resolve();
+  let conflictLocked = false;
 
   if (contextDetails && window.matchMedia("(min-width: 721px)").matches) {
     contextDetails.open = true;
@@ -1749,18 +1765,52 @@ function bindEncounterWorkspace(patientId, visitId) {
     status: "draft"
   });
 
+  const applySavedVisit = (savedVisit) => {
+    if (!savedVisit) return;
+    currentVisit = normalizeVisit(savedVisit);
+    state.visits = state.visits.map((item) => (item.id === visitId ? currentVisit : item));
+  };
+
+  const setConflictState = () => {
+    conflictLocked = true;
+    if (saveTimer) window.clearTimeout(saveTimer);
+    if (saveState) {
+      saveState.textContent = "Запись изменилась в другой вкладке или на другом устройстве. Обновите данные перед продолжением.";
+    }
+  };
+
   const saveNow = async (status = "draft") => {
     if (saveTimer) window.clearTimeout(saveTimer);
+    if (conflictLocked) return null;
     if (saveState) saveState.textContent = "Сохранение…";
-    await dbRepository.updateVisit(visitId, { ...collect(), status });
-    await hydrate();
+    try {
+      const savedVisit = await dbRepository.updateVisit(visitId, {
+        ...collect(),
+        status,
+        expectedVersion: currentVisit.version
+      });
+      applySavedVisit(savedVisit);
+    } catch (error) {
+      if (error instanceof RepositoryError && error.type === REPOSITORY_ERROR_TYPES.CONFLICT) {
+        setConflictState();
+        return null;
+      }
+      throw error;
+    }
     if (saveState) saveState.textContent = status === "completed" ? "Сохранено" : "Черновик сохранён";
+    return currentVisit;
+  };
+
+  const queueSave = (status = "draft") => {
+    saveChain = saveChain.catch(() => null).then(() => saveNow(status));
+    return saveChain;
   };
 
   const scheduleSave = () => {
+    if (conflictLocked) return;
     if (saveState) saveState.textContent = "Сохранение…";
     if (saveTimer) window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => saveNow("draft"), 700);
+    saveTimer = window.setTimeout(() => queueSave("draft"), 700);
   };
 
   document.querySelectorAll("[data-encounter-field]").forEach((field) => {
@@ -1777,21 +1827,30 @@ function bindEncounterWorkspace(patientId, visitId) {
     input.addEventListener("change", async (event) => {
       const files = await readFiles(event.target.files);
       for (const file of files) await dbRepository.addAttachment(patientId, visitId, file);
-      await saveNow("draft");
+      await queueSave("draft");
       await route(`#/patient/${patientId}/encounter/${visitId}`);
     });
   });
   document.querySelectorAll("[data-complete-encounter]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await saveNow("draft");
-      const data = collect();
-      if (!data.note && !data.decision && !data.nextStep && !state.attachments.some((item) => item.visitId === visitId)) {
-        if (saveState) saveState.textContent = "Добавьте запись, решение, следующий шаг или документ";
-        return;
+      if (saveTimer) window.clearTimeout(saveTimer);
+      button.disabled = true;
+      try {
+        await saveChain;
+        await queueSave("draft");
+        if (conflictLocked) return;
+        const data = collect();
+        if (!data.note && !data.decision && !data.nextStep && !state.attachments.some((item) => item.visitId === visitId)) {
+          if (saveState) saveState.textContent = "Добавьте запись, решение, следующий шаг или документ";
+          return;
+        }
+        const completedVisit = await queueSave("completed");
+        if (!completedVisit) return;
+        showToast("Обращение сохранено");
+        await route(`#/patient/${patientId}`);
+      } finally {
+        button.disabled = false;
       }
-      await dbRepository.updateVisit(visitId, { ...data, status: "completed", date: todayISO() });
-      showToast("Обращение сохранено");
-      await route(`#/patient/${patientId}`);
     });
   });
 }

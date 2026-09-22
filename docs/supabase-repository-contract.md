@@ -220,7 +220,13 @@ When a visit is completed through `updateVisit()`, `status` becomes `completed` 
 - return the updated visit including the new version;
 - report a conflict distinctly so encounter autosave can reload or show a non-destructive conflict state.
 
-The current UI does not pass an expected version, so the encounter workspace needs a small state addition before the cloud switch.
+The encounter workspace now carries the last successfully loaded or saved Visit as the authoritative client version source. It passes `expectedVersion` from that Visit, not from DOM state. A successful repository response replaces the in-memory Visit and its returned `version` becomes the version for the next save.
+
+Autosave requests are serialized so a later edit waits for the previous save to return before using the next expected version. The UI does not fake-increment versions before the repository responds.
+
+On `RepositoryError(CONFLICT)`, autosave stops for the current Visit and the existing status area tells the user that the record changed elsewhere and should be refreshed before continuing. The form is not rerendered, so the unsaved local text remains visible. The UI does not automatically retry, overwrite, merge, or replace the user's local form content.
+
+The production source of truth is still local IndexedDB. The local repository accepts the same `expectedVersion` shape for compatibility and returns the saved Visit, but local storage is not intended to emulate server-side conflict detection.
 
 ## Draft Conflict Handling
 
