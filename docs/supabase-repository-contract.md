@@ -270,6 +270,36 @@ Medical repository errors are surfaced as controlled UI states or messages:
 - `CONFLICT`: preserve local form content and stop autosave without retry or merge;
 - `UNKNOWN`: show a generic MedNote Cloud failure.
 
+## Runtime Hardening Notes
+
+The active runtime now disables patient and visit submit buttons while their save is in flight. Start-encounter and attachment add/delete actions also guard against repeat clicks while the cloud request is pending. These UI guards reduce accidental duplicate operations, but the database constraints and RLS remain the source of truth.
+
+Attachment and signed URL behavior is intentionally conservative:
+
+- signed URLs are short-lived and created only on demand;
+- missing objects or failed signed URL creation show a controlled "file unavailable" message;
+- metadata is not silently removed when object deletion fails;
+- object/metadata mismatch repair is an administrative audit concern, not automatic product behavior.
+
+Known cloud MVP debt:
+
+- hydrate uses an N+1 pattern: one patient query, then one visit query and one attachment query per patient. For `N` patients this is `1 + 2N` medical reads, plus patient weight reads inside the patient repository. This is acceptable for tiny MVP datasets and should become batched reads or pagination before larger production use.
+- patient delete is intentionally absent from the product UI. Test cleanup and administrative deletion must be explicit and scoped to known test rows.
+- IndexedDB code remains as inactive legacy code and should not be treated as a fallback.
+
+## Production Readiness Checklist Before Real Medical Data
+
+Required before real medical data:
+
+- enable Supabase leaked password protection;
+- define an MFA policy for doctor accounts and test account recovery UX;
+- verify public signup and anonymous sign-in remain disabled for the intended deployment;
+- document operational access to backups/restore and the limits of the current Supabase plan;
+- decide whether to move from Free to a paid Supabase plan before storing real patient data;
+- define a harmless keep-alive strategy only if Free-plan auto-pause would disrupt development. Do not use dummy medical writes for keep-alive.
+
+Security Advisor currently reports leaked password protection as disabled. Performance Advisor currently reports unused indexes on the young MVP dataset; this is informational until realistic query volume exists.
+
 ## Current Auth Boundary
 
 The app now gates the local IndexedDB MVP behind Supabase Auth. This proves login, restored session, logout, and route protection, but it does not make local medical data cloud-owned yet.

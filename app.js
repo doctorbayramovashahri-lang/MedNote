@@ -1530,6 +1530,18 @@ function showToast(message) {
   window.setTimeout(() => toast.remove(), 1800);
 }
 
+function repositoryMessage(error, fallback = "Операция временно недоступна. Попробуйте ещё раз.") {
+  if (!(error instanceof RepositoryError)) return fallback;
+  const messages = {
+    [REPOSITORY_ERROR_TYPES.AUTH]: "Сессия истекла. Войдите снова.",
+    [REPOSITORY_ERROR_TYPES.NETWORK]: "Не удалось связаться с MedNote Cloud. Проверьте соединение.",
+    [REPOSITORY_ERROR_TYPES.PERMISSION]: "Нет доступа к этим данным.",
+    [REPOSITORY_ERROR_TYPES.CONFLICT]: "Данные изменились в другом окне. Обновите страницу перед продолжением.",
+    [REPOSITORY_ERROR_TYPES.UNKNOWN]: fallback
+  };
+  return messages[error.type] || fallback;
+}
+
 function patientForm(patient = null) {
   const isEdit = Boolean(patient);
   patient = patient ? normalizePatient(patient) : normalizePatient({});
@@ -1642,6 +1654,8 @@ function patientForm(patient = null) {
   `);
   node.querySelector("form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const submit = event.currentTarget.querySelector('button[type="submit"]');
+    if (submit?.disabled) return;
     const form = new FormData(event.currentTarget);
     const input = {
       fullName: String(form.get("fullName")).trim(),
@@ -1666,10 +1680,17 @@ function patientForm(patient = null) {
     if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
       return (node.querySelector('[data-error="email"]').textContent = "Проверьте email");
     }
-    const saved = isEdit ? await repository.updatePatient(patient.id, input) : await repository.createPatient(input);
-    node.remove();
-    showToast("Сохранено");
-    await route(`#/patient/${saved.id}`);
+    if (submit) submit.disabled = true;
+    try {
+      const saved = isEdit ? await repository.updatePatient(patient.id, input) : await repository.createPatient(input);
+      node.remove();
+      showToast("Сохранено");
+      await route(`#/patient/${saved.id}`);
+    } catch (error) {
+      if (submit) submit.disabled = false;
+      const target = node.querySelector('[data-error="fullName"]');
+      if (target) target.textContent = repositoryMessage(error, "Не удалось сохранить пациента. Попробуйте ещё раз.");
+    }
   });
 }
 
@@ -1751,6 +1772,8 @@ function visitForm(patientId, visit = null) {
   }
   node.querySelector("form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const submit = event.currentTarget.querySelector('button[type="submit"]');
+    if (submit?.disabled) return;
     const form = new FormData(event.currentTarget);
     const inputValue = {
       date: String(form.get("date")),
@@ -1760,10 +1783,17 @@ function visitForm(patientId, visit = null) {
     node.querySelectorAll(".error").forEach((item) => (item.textContent = ""));
     if (!inputValue.date) return (node.querySelector('[data-error="date"]').textContent = "Укажите дату");
     if (!inputValue.note) return (node.querySelector('[data-error="note"]').textContent = "Добавьте текст осмотра или заметку");
-    if (isEdit) await repository.updateVisit(visit.id, { ...inputValue, expectedVersion: normalizeVisit(visit).version });
-    else await repository.createVisit(patientId, inputValue, files);
-    node.remove();
-    await route(`#/patient/${patientId}`);
+    if (submit) submit.disabled = true;
+    try {
+      if (isEdit) await repository.updateVisit(visit.id, { ...inputValue, expectedVersion: normalizeVisit(visit).version });
+      else await repository.createVisit(patientId, inputValue, files);
+      node.remove();
+      await route(`#/patient/${patientId}`);
+    } catch (error) {
+      if (submit) submit.disabled = false;
+      const target = node.querySelector('[data-error="note"]');
+      if (target) target.textContent = repositoryMessage(error, "Не удалось сохранить обращение. Попробуйте ещё раз.");
+    }
   });
 }
 
@@ -1841,8 +1871,15 @@ function bindActions() {
   bindPatientFormButtons(document);
   document.querySelectorAll("[data-start-encounter]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const draft = await repository.getOrCreateDraftVisit(button.dataset.startEncounter);
-      await route(`#/patient/${button.dataset.startEncounter}/encounter/${draft.id}`);
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const draft = await repository.getOrCreateDraftVisit(button.dataset.startEncounter);
+        await route(`#/patient/${button.dataset.startEncounter}/encounter/${draft.id}`);
+      } catch (error) {
+        button.disabled = false;
+        showToast(repositoryMessage(error, "Не удалось открыть обращение"));
+      }
     });
   });
   document.querySelectorAll("[data-open-visit-form]").forEach((button) => {
@@ -1858,18 +1895,32 @@ function bindActions() {
     input.addEventListener("change", async (event) => {
       const visit = state.visits.find((item) => item.id === input.dataset.addFile);
       const files = await readFiles(event.target.files);
-      for (const file of files) await repository.addAttachment(visit.patientId, visit.id, file);
-      await route(`#/patient/${visit.patientId}`);
+      input.disabled = true;
+      try {
+        for (const file of files) await repository.addAttachment(visit.patientId, visit.id, file);
+        await route(`#/patient/${visit.patientId}`);
+      } catch (error) {
+        input.disabled = false;
+        input.value = "";
+        showToast(repositoryMessage(error, "Не удалось добавить документ"));
+      }
     });
   });
   document.querySelectorAll("[data-remove-attachment]").forEach((button) => {
     button.addEventListener("click", async () => {
+      if (button.disabled) return;
       if (!confirm("Удалить это вложение из обращения?")) return;
       const visit = state.visits.find((item) =>
         state.attachments.some((attachment) => attachment.id === button.dataset.removeAttachment && attachment.visitId === item.id)
       );
-      await repository.removeAttachment(button.dataset.removeAttachment);
-      await route(`#/patient/${visit?.patientId || ""}`);
+      button.disabled = true;
+      try {
+        await repository.removeAttachment(button.dataset.removeAttachment);
+        await route(`#/patient/${visit?.patientId || ""}`);
+      } catch (error) {
+        button.disabled = false;
+        showToast(repositoryMessage(error, "Не удалось удалить документ"));
+      }
     });
   });
   document.querySelectorAll("[data-view-image]").forEach((button) => {
@@ -1996,9 +2047,16 @@ function bindEncounterWorkspace(patientId, visitId) {
   document.querySelectorAll("[data-encounter-add-file]").forEach((input) => {
     input.addEventListener("change", async (event) => {
       const files = await readFiles(event.target.files);
-      for (const file of files) await repository.addAttachment(patientId, visitId, file);
-      await queueSave("draft");
-      await route(`#/patient/${patientId}/encounter/${visitId}`);
+      input.disabled = true;
+      try {
+        for (const file of files) await repository.addAttachment(patientId, visitId, file);
+        await queueSave("draft");
+        await route(`#/patient/${patientId}/encounter/${visitId}`);
+      } catch (error) {
+        input.disabled = false;
+        input.value = "";
+        if (saveState) saveState.textContent = repositoryMessage(error, "Не удалось добавить документ");
+      }
     });
   });
   document.querySelectorAll("[data-complete-encounter]").forEach((button) => {
