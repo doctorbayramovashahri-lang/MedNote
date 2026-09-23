@@ -1,6 +1,6 @@
 # MedNote Production Readiness
 
-Status: Security & Operations Slice 11 audit.
+Status: Security & Operations Slice 12 Doctor Preview posture.
 
 Project:
 
@@ -35,9 +35,30 @@ Live Auth observations:
 
 Public signup, anonymous sign-ins, and manual identity linking must remain disabled for production. The available MCP tools did not expose direct read access to every hosted Auth toggle, so these specific dashboard toggles must be verified in Supabase Dashboard before first real medical data.
 
+## Doctor Preview Scope
+
+MedNote is currently being prepared for a Doctor Preview with one specific doctor, not a full clinical production rollout.
+
+Doctor Preview priorities:
+
+- Keep login `doctor` working.
+- Preserve the existing Supabase Auth UID and ownership chain.
+- Keep current Auth/RLS/Storage security unchanged.
+- Do not introduce lockout risk.
+- Do not store real medical data as the only critical source of record.
+
+Deferred to later hardening:
+
+- Real recovery email migration.
+- End-to-end password recovery.
+- Mandatory MFA.
+- Advanced MFA recovery.
+- Paid-plan backup/restore decisions.
+- Leaked password protection.
+
 ## Password Recovery Posture
 
-Password recovery is not production-ready.
+Password recovery is not available in the current Doctor Preview posture.
 
 Current issue:
 
@@ -45,10 +66,19 @@ Current issue:
 - This is not a real deliverable inbox.
 - A password reset email sent to this address would not reliably reach the doctor.
 
-Required decision before real medical data:
+Doctor Preview accepted limitation:
+
+- The owner must preserve the doctor password outside MedNote using a trusted password manager or equivalent secure process.
+- Password recovery email delivery is not expected to work while the Auth email is `doctor@mednote.local`.
+- Do not create a new Auth user to solve this; preserving UID is more important.
+- Do not use direct SQL against `auth.users`.
+- Do not add a service role key to the frontend or repository.
+- Do not create a privileged backend solely for this migration.
+
+Required before full medical production:
 
 - Keep the doctor-facing username UX.
-- Move the underlying Supabase Auth account to a real controlled recovery email, or define an administrator-held recovery process with a real mailbox.
+- Move the existing Supabase Auth account to a real controlled recovery email through a trusted UID-preserving admin path, or define an administrator-held recovery process with a real mailbox.
 - Verify password reset end-to-end before storing real medical data.
 
 ## Leaked Password Protection
@@ -60,11 +90,12 @@ Supabase Security Advisor reports:
 
 Supabase documentation says leaked password protection checks proposed passwords against HaveIBeenPwned and rejects known compromised passwords. Supabase documentation also states this feature is available on Pro Plan and above.
 
-Operational decision:
+Operational decision for Doctor Preview:
 
 - Do not enable blindly during this slice.
 - Current organization is on the Free plan.
-- Upgrade/plan decision is required before this can be treated as closed.
+- This is not a Doctor Preview blocker.
+- Upgrade/plan decision is required before this can be treated as closed for full medical production.
 
 Expected impact when available:
 
@@ -74,7 +105,7 @@ Expected impact when available:
 
 ## MFA Decision
 
-Decision: MFA REQUIRED BEFORE REAL MEDICAL DATA.
+Decision: MFA is deferred for Doctor Preview and required before full medical production.
 
 Rationale:
 
@@ -92,7 +123,13 @@ Minimum app-user MFA UX before enforcing:
 5. On later login, MedNote detects AAL1 -> AAL2 and challenges for TOTP.
 6. Recovery plan is defined before enforcement.
 
-Recovery / lost-device requirement:
+Doctor Preview decision:
+
+- Do not make MFA mandatory now.
+- Do not add mandatory AAL2 enforcement until enrollment and recovery are tested.
+- Absence of mandatory MFA is not a Doctor Preview blocker.
+
+Recovery / lost-device requirement before full medical production:
 
 - Supabase documentation says recovery codes are not supported for project-user MFA; users can enroll multiple factors.
 - For a single-doctor deployment, at least one backup TOTP factor or a documented admin recovery procedure is required before enforcing MFA.
@@ -151,7 +188,7 @@ Current restore posture:
 
 - Not verified for this project.
 - No restore drill has been performed.
-- This is a blocker before real medical data.
+- This is a blocker before full medical production.
 
 ## Storage Recovery Capability
 
@@ -190,8 +227,9 @@ Availability risk:
 
 Verdict:
 
-- Free acceptable for development/testing only.
-- Not acceptable for real medical data unless the owner explicitly accepts pause/unavailability risk and has a tested recovery plan.
+- Free acceptable for development, testing, and limited Doctor Preview feedback.
+- During Doctor Preview, MedNote must not be treated as the only critical source of medical records or documents.
+- Not acceptable for full medical production unless the owner explicitly accepts pause/unavailability risk and has a tested recovery plan.
 
 ## Keep-Alive Recommendation
 
@@ -252,11 +290,11 @@ Current scan result:
 
 ## Security Advisor Findings
 
-A - MUST FIX BEFORE REAL MEDICAL DATA:
+A - MUST FIX BEFORE FULL MEDICAL PRODUCTION:
 
 - `auth_leaked_password_protection`: disabled.
 
-B - SHOULD FIX SOON:
+B - SHOULD FIX BEFORE FULL MEDICAL PRODUCTION:
 
 - Verify Auth dashboard toggles: public signup OFF, anonymous sign-ins OFF, manual linking OFF.
 - Define and test MFA/recovery flow.
@@ -303,7 +341,18 @@ Live counts at Slice 11 audit:
 - `attachments = 0`
 - `storage_objects_medical_attachments = 0`
 
-## Required Checklist Before First Real Medical Document
+## Required Checklist Before Doctor Preview
+
+- [x] Existing login `doctor` remains the doctor-facing username.
+- [x] Existing Supabase Auth UID is preserved.
+- [x] No new Auth user created.
+- [x] No service role key added to frontend/repository.
+- [x] No direct SQL mutation of `auth.users`.
+- [x] Current RLS/Storage posture unchanged.
+- [x] Test DB/storage empty.
+- [x] Known password recovery limitation accepted for Doctor Preview.
+
+## Required Checklist Before Full Medical Production
 
 - [ ] Auth security accepted
 - [ ] Password recovery verified
@@ -318,9 +367,18 @@ Live counts at Slice 11 audit:
 
 ## Known Accepted Risks
 
-None accepted for real medical data yet.
+Accepted for Doctor Preview:
 
-Development-only accepted risks:
+- Auth email remains `doctor@mednote.local`.
+- Password recovery email is not available.
+- The project owner must preserve the doctor password securely outside MedNote.
+- MFA is not mandatory.
+- Free plan availability limitations.
+- Backup/restore drill is not verified.
+
+None accepted for full medical production yet.
+
+Development/preview accepted risks:
 
 - Free plan availability limitations.
 - No enrolled MFA factor.
@@ -328,9 +386,24 @@ Development-only accepted risks:
 - No tested backup/restore drill.
 - Empty database with unused indexes.
 
-## Final Slice 11 Classification
+## Final Slice 12 Classification
 
-BLOCKED BEFORE REAL MEDICAL DATA
+### A. Doctor Preview
+
+READY FOR DOCTOR PREVIEW
+
+Current Doctor Preview blockers: 0.
+
+Conditions:
+
+- Use with one known doctor for feedback.
+- Do not rely on MedNote as the only source of critical medical documents.
+- Preserve the doctor password securely outside MedNote while email recovery is unavailable.
+- Keep the database/storage empty of real production-grade medical records until the full-production checklist is closed.
+
+### B. Full Medical Production
+
+BLOCKED BEFORE FULL MEDICAL PRODUCTION
 
 Exact blockers:
 
