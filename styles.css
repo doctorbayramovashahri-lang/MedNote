@@ -949,6 +949,11 @@ textarea {
   animation: dialog-in var(--motion-slow) var(--ease-standard);
 }
 
+.patient-dialog {
+  width: min(1180px, calc(100vw - var(--s5) * 2));
+  max-height: min(94vh, 900px);
+}
+
 .dialog-head,
 .dialog-body,
 .dialog-actions {
@@ -1227,12 +1232,66 @@ textarea {
 
 .edit-form {
   display: grid;
-  gap: var(--s5);
+  gap: var(--s4);
 }
 
 .form-section {
   display: grid;
   gap: var(--s3);
+}
+
+.patient-dialog-form .dialog-body {
+  background: var(--surface-secondary);
+}
+
+.patient-dialog-form .dialog-head,
+.patient-dialog-form .dialog-actions {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.patient-dialog-form .dialog-head {
+  top: 0;
+}
+
+.patient-dialog-form .dialog-actions {
+  bottom: 0;
+}
+
+.patient-dialog-form .edit-form {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
+}
+
+.patient-dialog-form .form-section {
+  grid-column: span 6;
+  padding: var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.patient-dialog-form .form-section:first-child,
+.patient-dialog-form .form-section:nth-child(4),
+.patient-dialog-form .form-section:nth-child(5) {
+  grid-column: 1 / -1;
+}
+
+.patient-dialog-form .form-section:first-child .form-grid {
+  grid-template-columns: 1.35fr 0.85fr 0.85fr;
+}
+
+.patient-dialog-form .form-section:first-child .full {
+  grid-column: span 1;
+}
+
+.patient-dialog-form .form-section:nth-child(3) .form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.patient-dialog-form .form-section:nth-child(4) .form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .form-section h3 {
@@ -1418,6 +1477,25 @@ textarea {
   .dialog-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .patient-dialog {
+    width: min(100%, calc(100vw - var(--s3) * 2));
+  }
+
+  .patient-dialog-form .edit-form,
+  .patient-dialog-form .form-section:first-child .form-grid,
+  .patient-dialog-form .form-section:nth-child(3) .form-grid,
+  .patient-dialog-form .form-section:nth-child(4) .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-dialog-form .form-section,
+  .patient-dialog-form .form-section:first-child,
+  .patient-dialog-form .form-section:nth-child(4),
+  .patient-dialog-form .form-section:nth-child(5),
+  .patient-dialog-form .form-section:first-child .full {
+    grid-column: 1 / -1;
   }
 
   .segmented {

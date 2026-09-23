@@ -1507,10 +1507,11 @@ function renderEncounterWorkspace(patientId, visitId) {
   bindEncounterWorkspace(patient.id, visit.id);
 }
 
-function modal(content) {
+function modal(content, dialogClass = "") {
   const node = document.createElement("div");
   node.className = "modal open";
-  node.innerHTML = `<div class="dialog" role="dialog" aria-modal="true">${content}</div>`;
+  const className = ["dialog", dialogClass].filter(Boolean).join(" ");
+  node.innerHTML = `<div class="${className}" role="dialog" aria-modal="true">${content}</div>`;
   document.body.append(node);
   node.addEventListener("click", (event) => {
     if (event.target === node || event.target.matches("[data-close]")) node.remove();
@@ -1547,7 +1548,7 @@ function patientForm(patient = null) {
   patient = patient ? normalizePatient(patient) : normalizePatient({});
   const weight = latestWeight(patient);
   const node = modal(`
-    <form>
+    <form class="patient-dialog-form">
       <div class="dialog-head">
         <h2>${isEdit ? "Редактировать пациента" : "Новый пациент"}</h2>
         <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
@@ -1651,7 +1652,7 @@ function patientForm(patient = null) {
         <button class="button" type="submit">${isEdit ? "Сохранить" : "Добавить"}</button>
       </div>
     </form>
-  `);
+  `, "patient-dialog");
   node.querySelector("form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = event.currentTarget.querySelector('button[type="submit"]');
