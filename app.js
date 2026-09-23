@@ -1601,7 +1601,7 @@ function patientForm(patient = null) {
               <input id="heightCm" name="heightCm" type="number" min="0" step="1" value="${escapeHtml(String(patient.heightCm || ""))}" />
               <span class="hint"></span>
             </div>
-            <div class="field">
+            <div class="field parameter-weight-field">
               <label for="currentWeightKg">Вес, кг</label>
               <input id="currentWeightKg" name="currentWeightKg" type="number" min="0" step="0.1" value="${escapeHtml(String(weight?.valueKg || ""))}" />
               <span class="hint">Новая дата сохранит новое измерение</span>

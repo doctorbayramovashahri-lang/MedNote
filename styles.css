@@ -1287,10 +1287,18 @@ textarea {
 }
 
 .patient-dialog-form .form-section:nth-child(3) .form-grid {
+  column-gap: var(--s5);
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.patient-dialog-form .form-section:nth-child(3) .hint {
+.patient-dialog-form .parameter-weight-field {
+  position: relative;
+}
+
+.patient-dialog-form .parameter-weight-field .hint {
+  position: absolute;
+  top: calc(100% + var(--s1));
+  left: 0;
   white-space: nowrap;
 }
 
@@ -1500,6 +1508,11 @@ textarea {
   .patient-dialog-form .form-section:nth-child(5),
   .patient-dialog-form .form-section:first-child .full {
     grid-column: 1 / -1;
+  }
+
+  .patient-dialog-form .parameter-weight-field .hint {
+    position: static;
+    white-space: normal;
   }
 
   .segmented {
