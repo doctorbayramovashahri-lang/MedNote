@@ -23,8 +23,8 @@
           </a>
         </nav>
         <div class="storage-note">
-          <strong>Локальная версия</strong>
-          <span>Данные пациентов пока только в этом браузере</span>
+          <strong>MedNote Cloud</strong>
+          <span>Данные пациентов синхронизируются через защищённое облако</span>
           <button class="text-button sidebar-auth-action" id="logoutButton" type="button" hidden>Выйти</button>
         </div>
       </aside>
@@ -32,7 +32,7 @@
       <main id="app" class="main" tabindex="-1">
         <section class="state-panel">
           <div class="spinner" aria-hidden="true"></div>
-          <p>Загрузка локальной картотеки...</p>
+          <p>Загрузка картотеки из MedNote Cloud...</p>
         </section>
       </main>
     </div>
@@ -49,6 +49,6 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js"></script>
-    <script src="app.js?v=auth-foundation1"></script>
+    <script src="app.js?v=cloud-cutover9"></script>
   </body>
 </html>

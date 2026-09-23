@@ -1,6 +1,6 @@
 # MedNote Supabase Repository Contract
 
-Status: foundation contract for the future Supabase repository. The current production app still uses `dbRepository` backed by IndexedDB.
+Status: production runtime contract for the Supabase repository. The production app now uses `supabaseRepository` through a single `repository` boundary.
 
 ## Current UI Contract
 
@@ -29,48 +29,39 @@ All methods are already `async`, so a cloud repository can preserve the external
 - Attachment methods can keep the same names, but their return shape needs adaptation because Supabase Storage should not store Data URLs in table rows.
 - The repository should derive `doctor_id` from the authenticated Supabase session and never require UI callers to pass it.
 
-## Supabase Repository Foundation
+## Supabase Repository Runtime
 
-The app now contains a parallel read-only `supabaseRepository` implementation for the existing cloud schema. It is not connected to the production UI path yet.
+The app contains a cloud `supabaseRepository` implementation for the existing cloud schema. Production medical data flows through a single active repository reference:
 
 Current production path:
 
 ```text
-UI -> dbRepository -> IndexedDB
+UI -> repository -> supabaseRepository -> Supabase Postgres + private Storage
 ```
 
-Prepared cloud path:
+IndexedDB remains in the codebase as a legacy local implementation only. It is not the production source of truth, fallback, secondary read source, or dual-write target.
 
-```text
-UI -> repository contract -> supabaseRepository -> Supabase
-```
-
-The cloud foundation implements read methods only:
+The cloud repository implements:
 
 - `getPatients()`
 - `getPatient(id)`
 - `getVisits(patientId)`
 - `getVisit(id)`
 - `getAttachments(patientId, visitId = null)`
-
-It also implements cloud patient write methods, still not connected to the production UI:
-
 - `createPatient(input)`
 - `updatePatient(id, input)`
-
-It also implements cloud visit write foundation methods, still not connected to the production UI:
-
 - `createVisit(patientId, input, files = [])`
 - `getOrCreateDraftVisit(patientId)`
 - `updateVisit(id, input)`
-
-It also implements cloud attachment foundation methods, still not connected to the production UI:
-
 - `addAttachment(patientId, visitId, file)`
 - `removeAttachment(id)`
 - `getAttachmentSignedUrl(id, expiresIn = 120)`
 
 It also includes centralized mapping helpers for patients, patient weights, visits, and attachment metadata so snake_case/camelCase conversion does not leak into UI code.
+
+Cloud hydrate currently reads patients first, then reads visits and attachments per patient. This N+1 shape is accepted as a temporary MVP compromise while the dataset is small. It should be replaced by batched reads or pagination before larger production use.
+
+If cloud hydrate fails, the UI shows a controlled MedNote Cloud error state. It does not show stale IndexedDB data, demo data, or a false empty state.
 
 ## Cloud Mapping Rules
 
@@ -106,7 +97,7 @@ Attachment rows currently map metadata only:
 - `storage_bucket` -> `storageBucket`
 - `storage_path` -> `storagePath`
 
-Cloud attachment metadata does not fabricate `dataUrl`. UI work is still required before attachments can switch to Supabase Storage.
+Cloud attachment metadata does not fabricate `dataUrl`.
 
 ## Storage Path Contract
 
@@ -120,14 +111,14 @@ The attachment id is intentionally its own path segment. The Storage bucket is `
 
 Signed URLs are short-lived runtime artifacts. They are created on demand with a default TTL of 120 seconds and are not stored in Postgres.
 
-## IndexedDB Assumptions Leaking Into UI
+## Legacy IndexedDB Assumptions Removed From Active UI
 
-- Attachments are currently stored as full `dataUrl` values and can be opened directly from the row object.
-- File reads happen in the UI before `createVisit()` and `addAttachment()` receive the file payload.
+- Attachments used to be stored as full `dataUrl` values and opened directly from the row object.
+- Active file reads now pass browser `File`/`Blob` payloads to the repository before `createVisit()` and `addAttachment()` upload them to private Storage.
 - Patient weight history is embedded inside each patient object, while the cloud schema stores weights in `patient_weights`.
 - The UI assumes repository calls are fast enough to hydrate all visits and attachments for all patients on every route.
-- Autosave in encounter mode repeatedly calls `updateVisit()` and assumes last write wins.
-- `updateVisit()` has no returned version contract yet.
+- Autosave in encounter mode serializes `updateVisit()` and carries the returned cloud version forward.
+- `updateVisit()` has a returned version contract.
 
 ## Return Shape Changes Needed For Storage
 
@@ -147,7 +138,7 @@ Current attachment shape:
 }
 ```
 
-Future cloud attachment shape should preserve UI-friendly fields while adding Storage metadata:
+Cloud attachment shape preserves UI-friendly fields while adding Storage metadata:
 
 ```js
 {
@@ -161,7 +152,7 @@ Future cloud attachment shape should preserve UI-friendly fields while adding St
   addedAt,
   storageBucket,
   storagePath,
-  previewUrl
+  hasBinaryUrl
 }
 ```
 
@@ -241,7 +232,7 @@ Autosave requests are serialized so a later edit waits for the previous save to 
 
 On `RepositoryError(CONFLICT)`, autosave stops for the current Visit and the existing status area tells the user that the record changed elsewhere and should be refreshed before continuing. The form is not rerendered, so the unsaved local text remains visible. The UI does not automatically retry, overwrite, merge, or replace the user's local form content.
 
-The production source of truth is still local IndexedDB. The local repository accepts the same `expectedVersion` shape for compatibility and returns the saved Visit, but local storage is not intended to emulate server-side conflict detection.
+Supabase is the production source of truth. The legacy local repository accepts the same `expectedVersion` shape for compatibility if manually reactivated during development, but local storage is not active and is not intended to emulate server-side conflict detection.
 
 ## Cloud Attachment Behavior
 
@@ -253,7 +244,9 @@ If Storage upload fails, no metadata row is created. If metadata insert fails af
 
 `getAttachmentSignedUrl(id, expiresIn)` reads owned metadata through RLS and creates a short-lived signed URL for the private object. The URL is not stored in application state or database rows.
 
-The production repository source still uses local IndexedDB attachments with `dataUrl`, but the attachment rendering/opening path is cloud-compatible with metadata-only rows. Cloud attachment methods are foundation-only until Patient, Visit, and Attachment source of truth switch together.
+The production repository source uses cloud attachment metadata and private Storage objects. Attachment rendering/opening resolves `storagePath` into a short-lived signed URL on demand. Signed URLs are not stored in database rows or long-lived application state.
+
+Legacy local `dataUrl` compatibility remains in the resolver for old IndexedDB-shaped objects, but the active production upload path passes browser `File`/`Blob` objects to Supabase Storage and does not create new Data URLs.
 
 ## Draft Conflict Handling
 
@@ -265,13 +258,17 @@ The database enforces one draft per `doctor_id + patient_id`. Cloud `getOrCreate
 
 This keeps the current UI contract stable while handling concurrent tabs/devices.
 
-## Required UI Changes Before Cloud Switch
+## Runtime Cutover Behavior
 
-- Stop storing attachment `dataUrl` as the only open mechanism in the cloud UI path.
-- Carry `visit.version` through encounter state and update calls.
-- Avoid full-route hydration of all visits and attachments when cloud latency matters.
-- Add explicit loading/error states around repository calls that can fail due to network, auth expiry, RLS, or concurrency.
-- Decide how local IndexedDB demo data is handled after login: keep local-only, migrate manually, or start with an empty cloud workspace.
+An authenticated empty Supabase workspace is a real empty MedNote state. The app does not seed demo patients after login and does not automatically import local IndexedDB data.
+
+Medical repository errors are surfaced as controlled UI states or messages:
+
+- `AUTH`: ask the doctor to sign in again;
+- `NETWORK`: ask to check the connection and retry;
+- `PERMISSION`: explain that the data is not available;
+- `CONFLICT`: preserve local form content and stop autosave without retry or merge;
+- `UNKNOWN`: show a generic MedNote Cloud failure.
 
 ## Current Auth Boundary
 

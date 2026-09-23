@@ -988,13 +988,15 @@ const dbRepository = (() => {
   };
 })();
 
+const repository = supabaseRepository;
+
 let state = { patients: [], visits: [], attachments: [], query: "" };
 let authState = { status: "auth-loading", session: null, error: "" };
 
 async function hydrate() {
-  state.patients = await dbRepository.getPatients();
-  const allVisits = await Promise.all(state.patients.map((patient) => dbRepository.getVisits(patient.id)));
-  const allAttachments = await Promise.all(state.patients.map((patient) => dbRepository.getAttachments(patient.id)));
+  state.patients = await repository.getPatients();
+  const allVisits = await Promise.all(state.patients.map((patient) => repository.getVisits(patient.id)));
+  const allAttachments = await Promise.all(state.patients.map((patient) => repository.getAttachments(patient.id)));
   state.visits = allVisits.flat();
   state.attachments = allAttachments.flat();
 }
@@ -1049,6 +1051,26 @@ function renderAuthError(message) {
       <p>${escapeHtml(message)}</p>
     </section>
   `;
+}
+
+function renderCloudError(error) {
+  resetUiState();
+  const type = error instanceof RepositoryError ? error.type : REPOSITORY_ERROR_TYPES.UNKNOWN;
+  const messages = {
+    [REPOSITORY_ERROR_TYPES.AUTH]: "Сессия истекла. Войдите снова.",
+    [REPOSITORY_ERROR_TYPES.NETWORK]: "Не удалось связаться с MedNote Cloud. Проверьте соединение и обновите страницу.",
+    [REPOSITORY_ERROR_TYPES.PERMISSION]: "Нет доступа к этим данным.",
+    [REPOSITORY_ERROR_TYPES.CONFLICT]: "Данные изменились в другом окне. Обновите страницу перед продолжением.",
+    [REPOSITORY_ERROR_TYPES.UNKNOWN]: "Не удалось загрузить данные из MedNote Cloud."
+  };
+  app.innerHTML = `
+    <section class="state-panel auth-panel">
+      <h2>MedNote Cloud временно недоступен</h2>
+      <p>${escapeHtml(messages[type] || messages[REPOSITORY_ERROR_TYPES.UNKNOWN])}</p>
+      <button class="button" type="button" data-retry-cloud>Повторить</button>
+    </section>
+  `;
+  document.querySelector("[data-retry-cloud]")?.addEventListener("click", () => route(location.hash || "#/"));
 }
 
 function bindLoginForm() {
@@ -1644,7 +1666,7 @@ function patientForm(patient = null) {
     if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
       return (node.querySelector('[data-error="email"]').textContent = "Проверьте email");
     }
-    const saved = isEdit ? await dbRepository.updatePatient(patient.id, input) : await dbRepository.createPatient(input);
+    const saved = isEdit ? await repository.updatePatient(patient.id, input) : await repository.createPatient(input);
     node.remove();
     showToast("Сохранено");
     await route(`#/patient/${saved.id}`);
@@ -1652,25 +1674,13 @@ function patientForm(patient = null) {
 }
 
 async function readFiles(fileList) {
-  const files = Array.from(fileList);
-  return Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () =>
-            resolve({
-              kind: file.type.includes("pdf") ? "pdf" : "analysis-photo",
-              name: file.name,
-              mime: file.type || "application/octet-stream",
-              dataUrl: reader.result,
-              size: file.size
-            });
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        })
-    )
-  );
+  return Array.from(fileList).map((file) => ({
+    kind: file.type.includes("pdf") ? "pdf" : "analysis-photo",
+    name: file.name,
+    mime: file.type || "application/octet-stream",
+    file,
+    size: file.size
+  }));
 }
 
 function visitForm(patientId, visit = null) {
@@ -1750,8 +1760,8 @@ function visitForm(patientId, visit = null) {
     node.querySelectorAll(".error").forEach((item) => (item.textContent = ""));
     if (!inputValue.date) return (node.querySelector('[data-error="date"]').textContent = "Укажите дату");
     if (!inputValue.note) return (node.querySelector('[data-error="note"]').textContent = "Добавьте текст осмотра или заметку");
-    if (isEdit) await dbRepository.updateVisit(visit.id, { ...inputValue, expectedVersion: normalizeVisit(visit).version });
-    else await dbRepository.createVisit(patientId, inputValue, files);
+    if (isEdit) await repository.updateVisit(visit.id, { ...inputValue, expectedVersion: normalizeVisit(visit).version });
+    else await repository.createVisit(patientId, inputValue, files);
     node.remove();
     await route(`#/patient/${patientId}`);
   });
@@ -1812,7 +1822,12 @@ async function route(targetHash = location.hash || "#/") {
     renderLogin(authState.error);
     return;
   }
-  await hydrate();
+  try {
+    await hydrate();
+  } catch (error) {
+    renderCloudError(error);
+    return;
+  }
   const encounterMatch = location.hash.match(/^#\/patient\/([^/]+)\/encounter\/([^/]+)$/);
   const match = location.hash.match(/^#\/patient\/([^/]+)$/);
   if (encounterMatch) renderEncounterWorkspace(encounterMatch[1], encounterMatch[2]);
@@ -1826,7 +1841,7 @@ function bindActions() {
   bindPatientFormButtons(document);
   document.querySelectorAll("[data-start-encounter]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const draft = await dbRepository.getOrCreateDraftVisit(button.dataset.startEncounter);
+      const draft = await repository.getOrCreateDraftVisit(button.dataset.startEncounter);
       await route(`#/patient/${button.dataset.startEncounter}/encounter/${draft.id}`);
     });
   });
@@ -1843,7 +1858,7 @@ function bindActions() {
     input.addEventListener("change", async (event) => {
       const visit = state.visits.find((item) => item.id === input.dataset.addFile);
       const files = await readFiles(event.target.files);
-      for (const file of files) await dbRepository.addAttachment(visit.patientId, visit.id, file);
+      for (const file of files) await repository.addAttachment(visit.patientId, visit.id, file);
       await route(`#/patient/${visit.patientId}`);
     });
   });
@@ -1853,7 +1868,7 @@ function bindActions() {
       const visit = state.visits.find((item) =>
         state.attachments.some((attachment) => attachment.id === button.dataset.removeAttachment && attachment.visitId === item.id)
       );
-      await dbRepository.removeAttachment(button.dataset.removeAttachment);
+      await repository.removeAttachment(button.dataset.removeAttachment);
       await route(`#/patient/${visit?.patientId || ""}`);
     });
   });
@@ -1927,12 +1942,18 @@ function bindEncounterWorkspace(patientId, visitId) {
     }
   };
 
+  const setSaveErrorState = () => {
+    if (saveState) {
+      saveState.textContent = "Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.";
+    }
+  };
+
   const saveNow = async (status = "draft") => {
     if (saveTimer) window.clearTimeout(saveTimer);
     if (conflictLocked) return null;
     if (saveState) saveState.textContent = "Сохранение…";
     try {
-      const savedVisit = await dbRepository.updateVisit(visitId, {
+      const savedVisit = await repository.updateVisit(visitId, {
         ...collect(),
         status,
         expectedVersion: currentVisit.version
@@ -1943,6 +1964,7 @@ function bindEncounterWorkspace(patientId, visitId) {
         setConflictState();
         return null;
       }
+      setSaveErrorState();
       throw error;
     }
     if (saveState) saveState.textContent = status === "completed" ? "Сохранено" : "Черновик сохранён";
@@ -1958,7 +1980,7 @@ function bindEncounterWorkspace(patientId, visitId) {
     if (conflictLocked) return;
     if (saveState) saveState.textContent = "Сохранение…";
     if (saveTimer) window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => queueSave("draft"), 700);
+    saveTimer = window.setTimeout(() => queueSave("draft").catch(() => null), 700);
   };
 
   document.querySelectorAll("[data-encounter-field]").forEach((field) => {
@@ -1974,7 +1996,7 @@ function bindEncounterWorkspace(patientId, visitId) {
   document.querySelectorAll("[data-encounter-add-file]").forEach((input) => {
     input.addEventListener("change", async (event) => {
       const files = await readFiles(event.target.files);
-      for (const file of files) await dbRepository.addAttachment(patientId, visitId, file);
+      for (const file of files) await repository.addAttachment(patientId, visitId, file);
       await queueSave("draft");
       await route(`#/patient/${patientId}/encounter/${visitId}`);
     });
@@ -1984,7 +2006,7 @@ function bindEncounterWorkspace(patientId, visitId) {
       if (saveTimer) window.clearTimeout(saveTimer);
       button.disabled = true;
       try {
-        await saveChain;
+        await saveChain.catch(() => null);
         await queueSave("draft");
         if (conflictLocked) return;
         const data = collect();
@@ -1996,6 +2018,12 @@ function bindEncounterWorkspace(patientId, visitId) {
         if (!completedVisit) return;
         showToast("Обращение сохранено");
         await route(`#/patient/${patientId}`);
+      } catch (error) {
+        if (error instanceof RepositoryError && error.type === REPOSITORY_ERROR_TYPES.CONFLICT) {
+          setConflictState();
+        } else {
+          setSaveErrorState();
+        }
       } finally {
         button.disabled = false;
       }
