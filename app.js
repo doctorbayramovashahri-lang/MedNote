@@ -1129,16 +1129,17 @@ function compareVisitsDesc(a, b) {
 }
 
 function attachmentIcon(attachment) {
-  if (attachment.mime.startsWith("image/")) {
+  if (attachment.mime.startsWith("image/") && attachment.dataUrl) {
     return `<img src="${attachment.dataUrl}" alt="">`;
   }
-  return "PDF";
+  if (attachment.mime.includes("pdf")) return "PDF";
+  return "DOC";
 }
 
 function renderAttachment(attachment, removable = false) {
   const openAction = attachment.mime.startsWith("image/")
     ? `<button class="text-button compact-action" type="button" data-view-image="${attachment.id}">Открыть</button>`
-    : `<a class="text-button compact-action" href="${attachment.dataUrl}" target="_blank" rel="noopener">Открыть PDF</a>`;
+    : `<button class="text-button compact-action" type="button" data-open-attachment="${attachment.id}">Открыть</button>`;
   return `
     <div class="attachment-row">
       <div class="attachment-thumb">${attachmentIcon(attachment)}</div>
@@ -1152,6 +1153,21 @@ function renderAttachment(attachment, removable = false) {
       </div>
     </div>
   `;
+}
+
+async function resolveAttachmentUrl(attachment) {
+  if (attachment?.dataUrl) return attachment.dataUrl;
+  if (attachment?.storagePath) return supabaseRepository.getAttachmentSignedUrl(attachment.id);
+  throw new RepositoryError(REPOSITORY_ERROR_TYPES.UNKNOWN, "Attachment file is unavailable.");
+}
+
+async function openAttachment(attachment) {
+  try {
+    const url = await resolveAttachmentUrl(attachment);
+    window.open(url, "_blank", "noopener");
+  } catch {
+    showToast("Файл временно не удалось открыть");
+  }
 }
 
 function renderPatientList() {
@@ -1741,16 +1757,27 @@ function visitForm(patientId, visit = null) {
   });
 }
 
-function imageViewer(attachment) {
-  modal(`
+async function imageViewer(attachment) {
+  if (!attachment) {
+    showToast("Файл временно не удалось открыть");
+    return;
+  }
+  const node = modal(`
     <div class="dialog-head">
       <h2>${escapeHtml(attachment.name)}</h2>
       <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
     </div>
     <div class="dialog-body">
-      <img src="${attachment.dataUrl}" alt="${escapeHtml(attachment.name)}" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--border)" />
+      <p class="eyebrow" data-attachment-loading>Загружаем файл...</p>
     </div>
   `);
+  const body = node.querySelector(".dialog-body");
+  try {
+    const url = await resolveAttachmentUrl(attachment);
+    body.innerHTML = `<img src="${url}" alt="${escapeHtml(attachment.name)}" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--border)" />`;
+  } catch {
+    body.innerHTML = `<p class="eyebrow">Файл временно не удалось открыть</p>`;
+  }
 }
 
 function weightHistoryViewer(patient) {
@@ -1834,6 +1861,12 @@ function bindActions() {
     button.addEventListener("click", () => {
       const attachment = state.attachments.find((item) => item.id === button.dataset.viewImage);
       imageViewer(attachment);
+    });
+  });
+  document.querySelectorAll("[data-open-attachment]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const attachment = state.attachments.find((item) => item.id === button.dataset.openAttachment);
+      openAttachment(attachment);
     });
   });
   document.querySelectorAll("[data-weight-history]").forEach((button) => {

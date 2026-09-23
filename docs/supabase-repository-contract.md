@@ -165,7 +165,14 @@ Future cloud attachment shape should preserve UI-friendly fields while adding St
 }
 ```
 
-The UI should stop assuming `dataUrl` is always available. Image/PDF opening should go through `previewUrl` or a repository helper that can return a signed URL later.
+The UI no longer treats `dataUrl` as the only way to open a file. Attachment opening goes through a resolver:
+
+```text
+attachment.dataUrl -> local IndexedDB URL
+attachment.storagePath -> short-lived Supabase signed URL
+```
+
+Signed URLs are resolved on demand and are not stored in the database or long-lived application state. If URL resolution fails or the object is missing/expired, the UI shows a controlled message instead of a raw Supabase error.
 
 ## Doctor Ownership
 
@@ -246,7 +253,7 @@ If Storage upload fails, no metadata row is created. If metadata insert fails af
 
 `getAttachmentSignedUrl(id, expiresIn)` reads owned metadata through RLS and creates a short-lived signed URL for the private object. The URL is not stored in application state or database rows.
 
-The production UI still uses local IndexedDB attachments with `dataUrl`. Cloud attachment methods are foundation-only until Patient, Visit, and Attachment source of truth switch together.
+The production repository source still uses local IndexedDB attachments with `dataUrl`, but the attachment rendering/opening path is cloud-compatible with metadata-only rows. Cloud attachment methods are foundation-only until Patient, Visit, and Attachment source of truth switch together.
 
 ## Draft Conflict Handling
 
