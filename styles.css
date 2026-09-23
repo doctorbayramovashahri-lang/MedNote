@@ -1287,7 +1287,11 @@ textarea {
 }
 
 .patient-dialog-form .form-section:nth-child(3) .form-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.45fr) minmax(0, 1fr);
+}
+
+.patient-dialog-form .form-section:nth-child(3) .hint {
+  white-space: nowrap;
 }
 
 .patient-dialog-form .form-section:nth-child(4) .form-grid {
