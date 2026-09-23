@@ -1604,10 +1604,10 @@ function patientForm(patient = null) {
             <div class="field parameter-weight-field">
               <label for="currentWeightKg">Вес, кг</label>
               <input id="currentWeightKg" name="currentWeightKg" type="number" min="0" step="0.1" value="${escapeHtml(String(weight?.valueKg || ""))}" />
-              <span class="hint">Новая дата сохранит новое измерение</span>
+              <span class="hint"></span>
             </div>
             <div class="field">
-              <label for="weightMeasuredAt">Дата измерения веса</label>
+              <label for="weightMeasuredAt">Дата измерения</label>
               <input id="weightMeasuredAt" name="weightMeasuredAt" type="date" value="${escapeHtml(weight?.measuredAt || todayISO())}" />
               <span class="hint"></span>
             </div>

@@ -950,8 +950,8 @@ textarea {
 }
 
 .patient-dialog {
-  width: min(1180px, calc(100vw - var(--s5) * 2));
-  max-height: min(94vh, 900px);
+  width: min(94vw, 1420px);
+  max-height: calc(100vh - 32px);
 }
 
 .dialog-head,
@@ -1241,7 +1241,7 @@ textarea {
 }
 
 .patient-dialog-form .dialog-body {
-  background: var(--surface-secondary);
+  background: var(--surface);
 }
 
 .patient-dialog-form .dialog-head,
@@ -1249,6 +1249,12 @@ textarea {
   position: sticky;
   z-index: 1;
   background: var(--surface);
+}
+
+.patient-dialog-form .dialog-head,
+.patient-dialog-form .dialog-actions {
+  min-height: 58px;
+  padding: var(--s3) var(--s4);
 }
 
 .patient-dialog-form .dialog-head {
@@ -1261,25 +1267,39 @@ textarea {
 
 .patient-dialog-form .edit-form {
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--s3) var(--s4);
   align-items: start;
 }
 
 .patient-dialog-form .form-section {
   grid-column: span 6;
-  padding: var(--s4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: var(--s3) 0 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
   background: var(--surface);
 }
 
-.patient-dialog-form .form-section:first-child,
+.patient-dialog-form .form-section:first-child {
+  grid-column: 1 / -1;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.patient-dialog-form .form-section:nth-child(2) {
+  grid-column: span 5;
+}
+
+.patient-dialog-form .form-section:nth-child(3) {
+  grid-column: span 7;
+}
+
 .patient-dialog-form .form-section:nth-child(4),
 .patient-dialog-form .form-section:nth-child(5) {
   grid-column: 1 / -1;
 }
 
 .patient-dialog-form .form-section:first-child .form-grid {
-  grid-template-columns: 1.35fr 0.85fr 0.85fr;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr) minmax(180px, 1fr);
 }
 
 .patient-dialog-form .form-section:first-child .full {
@@ -1287,23 +1307,41 @@ textarea {
 }
 
 .patient-dialog-form .form-section:nth-child(3) .form-grid {
-  column-gap: var(--s5);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.patient-dialog-form .parameter-weight-field {
-  position: relative;
-}
-
-.patient-dialog-form .parameter-weight-field .hint {
-  position: absolute;
-  top: calc(100% + var(--s1));
-  left: 0;
-  white-space: nowrap;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.95fr) minmax(170px, 1fr);
 }
 
 .patient-dialog-form .form-section:nth-child(4) .form-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.patient-dialog-form .form-section h3 {
+  padding-bottom: var(--s2);
+  font-size: 0.92rem;
+}
+
+.patient-dialog-form .field {
+  gap: 6px;
+}
+
+.patient-dialog-form .field label,
+.patient-dialog-form .field .label {
+  font-size: 0.82rem;
+}
+
+.patient-dialog-form input,
+.patient-dialog-form select {
+  min-height: 38px;
+}
+
+.patient-dialog-form textarea {
+  min-height: 82px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.patient-dialog-form .form-section:nth-child(5) textarea {
+  min-height: 64px;
+  max-height: 96px;
 }
 
 .form-section h3 {
@@ -1508,11 +1546,6 @@ textarea {
   .patient-dialog-form .form-section:nth-child(5),
   .patient-dialog-form .form-section:first-child .full {
     grid-column: 1 / -1;
-  }
-
-  .patient-dialog-form .parameter-weight-field .hint {
-    position: static;
-    white-space: normal;
   }
 
   .segmented {
