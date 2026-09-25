@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MedNote</title>
-    <link rel="stylesheet" href="styles.css?v=visit-mode3" />
+    <link rel="stylesheet" href="styles.css?v=home-dashboard1" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Основная навигация">
-        <a class="brand" href="#/" aria-label="MedNote, список пациентов">
+        <a class="brand" href="#/" aria-label="MedNote, главная">
           <span class="brand-mark">M</span>
           <span>
             <strong>MedNote</strong>
@@ -17,7 +17,11 @@
           </span>
         </a>
         <nav class="nav-list" aria-label="Разделы">
-          <a class="nav-item active" href="#/" aria-current="page">
+          <a class="nav-item active" href="#/" data-nav-section="home" aria-current="page">
+            <span aria-hidden="true">●</span>
+            Главная
+          </a>
+          <a class="nav-item" href="#/patients" data-nav-section="patients">
             <span aria-hidden="true">●</span>
             Пациенты
           </a>
@@ -51,6 +55,6 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
     <script src="document-parser.js?v=document-parser-fix1"></script>
     <script src="document-import.js?v=document-import-polish2"></script>
-    <script src="app.js?v=visit-mode3"></script>
+    <script src="app.js?v=home-dashboard1"></script>
   </body>
 </html>

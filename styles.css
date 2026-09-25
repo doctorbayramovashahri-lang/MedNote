@@ -300,6 +300,170 @@ h3 {
   max-width: 520px;
 }
 
+.dashboard-head {
+  margin-bottom: var(--s3);
+}
+
+.dashboard-head .page-actions {
+  gap: var(--s2);
+}
+
+.dashboard-head .button,
+.dashboard-head .ghost-button {
+  min-height: 38px;
+}
+
+.dashboard-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: var(--s3);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface), var(--surface-secondary) 34%);
+}
+
+.dashboard-summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--s2) var(--s3);
+  border-right: 1px solid var(--border);
+}
+
+.dashboard-summary > div:last-child {
+  border-right: 0;
+}
+
+.dashboard-summary span {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 680;
+}
+
+.dashboard-summary strong {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: var(--s3);
+  align-items: start;
+}
+
+.dashboard-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-panel-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-panel-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-panel-head p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.dashboard-rows {
+  display: grid;
+}
+
+.dashboard-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.8fr) auto;
+  gap: var(--s3);
+  align-items: center;
+  min-width: 0;
+  padding: var(--s3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.dashboard-row:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-row:hover,
+.dashboard-row:focus-visible {
+  background: var(--surface-secondary);
+  outline: none;
+}
+
+.dashboard-patient-row {
+  grid-template-columns: auto minmax(0, 1fr) minmax(130px, 0.75fr) auto;
+}
+
+.dashboard-row-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dashboard-row-main strong {
+  overflow: hidden;
+  font-size: 0.94rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-row-main span,
+.dashboard-row-context {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-row-action {
+  color: var(--accent-hover);
+  font-size: 0.84rem;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.dashboard-empty {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.dashboard-empty strong {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+}
+
+.dashboard-empty .button {
+  justify-self: start;
+  margin-top: var(--s1);
+}
+
 .field {
   display: grid;
   gap: var(--s2);
@@ -3102,6 +3266,10 @@ textarea {
     align-items: stretch;
     flex-direction: column;
   }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -3132,6 +3300,39 @@ textarea {
   .patient-list-head .page-actions .button,
   .patient-list-head .page-actions .ghost-button {
     flex: 1 1 100%;
+  }
+
+  .dashboard-head .page-actions {
+    justify-content: stretch;
+  }
+
+  .dashboard-head .page-actions .button,
+  .dashboard-head .page-actions .ghost-button {
+    flex: 1 1 100%;
+  }
+
+  .dashboard-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-panel-head,
+  .dashboard-row,
+  .dashboard-patient-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-panel-head {
+    display: grid;
+  }
+
+  .dashboard-row {
+    gap: var(--s2);
+  }
+
+  .dashboard-row-main strong,
+  .dashboard-row-main span,
+  .dashboard-row-context {
+    white-space: normal;
   }
 
   .patient-directory-toolbar {

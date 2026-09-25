@@ -1204,6 +1204,14 @@ function compareVisitsDesc(a, b) {
   return `${b.updatedAt || b.createdAt || ""}`.localeCompare(`${a.updatedAt || a.createdAt || ""}`);
 }
 
+function clinicalVisitTimestamp(visit = {}) {
+  return visit.date || visit.completedAt || visit.startedAt || visit.createdAt || "";
+}
+
+function patientById(patientId) {
+  return state.patients.find((patient) => patient.id === patientId) || null;
+}
+
 function attachmentIcon(attachment) {
   if (attachment.mime.startsWith("image/") && attachment.dataUrl) {
     return `<img src="${attachment.dataUrl}" alt="">`;
@@ -1244,6 +1252,130 @@ async function openAttachment(attachment) {
   } catch {
     showToast("Файл временно не удалось открыть");
   }
+}
+
+function dashboardDraftVisits() {
+  return state.visits
+    .filter((visit) => visit.status === "draft")
+    .sort(compareVisitsDesc);
+}
+
+function dashboardRecentPatients(limit = 5) {
+  return state.patients
+    .map((patient) => ({ patient, visit: latestVisit(patient.id) }))
+    .sort((a, b) => {
+      const visitCompare = `${clinicalVisitTimestamp(b.visit)}`.localeCompare(`${clinicalVisitTimestamp(a.visit)}`);
+      if (visitCompare) return visitCompare;
+      return a.patient.fullName.localeCompare(b.patient.fullName, "ru");
+    })
+    .slice(0, limit);
+}
+
+function renderDashboardDraft(visit) {
+  const patient = patientById(visit.patientId);
+  if (!patient) return "";
+  const context = shortTextPreview(visit.note || visit.decision || visit.nextStep || "", 110);
+  return `
+    <a class="dashboard-row dashboard-draft-row" href="#/patient/${patient.id}/encounter/${visit.id}">
+      <div class="dashboard-row-main">
+        <strong>${escapeHtml(patient.fullName)}</strong>
+        <span>${formatDate(visit.date)} · ${visitFormatLabel(visit.format)}</span>
+      </div>
+      <div class="dashboard-row-context">${context ? escapeHtml(context) : "Черновик без заметки"}</div>
+      <span class="dashboard-row-action">Продолжить</span>
+    </a>
+  `;
+}
+
+function renderDashboardRecentPatient({ patient, visit }) {
+  const birth = patient.birthDate ? `${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}` : "дата рождения не указана";
+  const lastVisit = visit ? `${formatShortDate(visit.date)} · ${visitFormatLabel(visit.format)}` : "обращений нет";
+  return `
+    <a class="dashboard-row dashboard-patient-row" href="#/patient/${patient.id}">
+      <div class="patient-avatar" aria-hidden="true">${escapeHtml(initials(patient.fullName))}</div>
+      <div class="dashboard-row-main">
+        <strong>${escapeHtml(patient.fullName)}</strong>
+        <span>${escapeHtml(birth)}</span>
+      </div>
+      <div class="dashboard-row-context">${escapeHtml(lastVisit)}</div>
+      <span class="chevron" aria-hidden="true">›</span>
+    </a>
+  `;
+}
+
+function renderHomeDashboard() {
+  const drafts = dashboardDraftVisits();
+  const recentPatients = dashboardRecentPatients();
+  const completedVisits = state.visits.filter((visit) => visit.status !== "draft");
+  app.innerHTML = `
+    <section class="page-head dashboard-head">
+      <div>
+        <h1>Главная</h1>
+        <p class="eyebrow">Рабочее пространство врача</p>
+      </div>
+      <div class="page-actions">
+        <button class="ghost-button" type="button" data-open-document-import>Импорт документа</button>
+        <a class="ghost-button" href="#/patients">Новый приём</a>
+        <button class="button" type="button" data-open-patient-form>+ Добавить пациента</button>
+      </div>
+    </section>
+
+    <section class="dashboard-summary" aria-label="Краткая сводка">
+      <div>
+        <span>Пациентов</span>
+        <strong>${state.patients.length}</strong>
+      </div>
+      <div>
+        <span>Черновиков</span>
+        <strong>${drafts.length}</strong>
+      </div>
+      <div>
+        <span>Завершённых обращений</span>
+        <strong>${completedVisits.length}</strong>
+      </div>
+    </section>
+
+    <section class="dashboard-grid">
+      <section class="dashboard-panel dashboard-panel-primary">
+        <div class="dashboard-panel-head">
+          <div>
+            <h2>Незавершённые обращения</h2>
+            <p>Черновики, к которым можно вернуться</p>
+          </div>
+        </div>
+        ${
+          drafts.length
+            ? `<div class="dashboard-rows">${drafts.map(renderDashboardDraft).join("")}</div>`
+            : `<div class="dashboard-empty"><strong>Незавершённых обращений нет</strong><span>Новые черновики появятся здесь после начала приёма.</span></div>`
+        }
+      </section>
+
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-head">
+          <div>
+            <h2>Последние пациенты</h2>
+            <p>По последним завершённым обращениям</p>
+          </div>
+          <a class="text-button compact-action" href="#/patients">Все пациенты →</a>
+        </div>
+        ${
+          recentPatients.length
+            ? `<div class="dashboard-rows">${recentPatients.map(renderDashboardRecentPatient).join("")}</div>`
+            : `<div class="dashboard-empty"><strong>Пациентов пока нет</strong><span>Добавьте первого пациента, чтобы начать работу.</span><button class="button" type="button" data-open-patient-form>+ Добавить пациента</button></div>`
+        }
+      </section>
+    </section>
+  `;
+}
+
+function updateNavigationState() {
+  const section = location.hash.startsWith("#/patients") || location.hash.startsWith("#/patient/") ? "patients" : "home";
+  document.querySelectorAll("[data-nav-section]").forEach((item) => {
+    const isActive = item.dataset.navSection === section;
+    item.classList.toggle("active", isActive);
+    if (isActive) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
 }
 
 function renderPatientList() {
@@ -2741,6 +2873,8 @@ function weightHistoryViewer(patient) {
 
 async function route(targetHash = location.hash || "#/") {
   if (targetHash !== location.hash) location.hash = targetHash;
+  const activeHash = targetHash || location.hash || "#/";
+  updateNavigationState();
   if (authState.status === "auth-loading") {
     renderAuthLoading();
     return;
@@ -2755,11 +2889,12 @@ async function route(targetHash = location.hash || "#/") {
     renderCloudError(error);
     return;
   }
-  const encounterMatch = location.hash.match(/^#\/patient\/([^/]+)\/encounter\/([^/]+)$/);
-  const match = location.hash.match(/^#\/patient\/([^/]+)$/);
+  const encounterMatch = activeHash.match(/^#\/patient\/([^/]+)\/encounter\/([^/]+)$/);
+  const match = activeHash.match(/^#\/patient\/([^/]+)$/);
   if (encounterMatch) renderEncounterWorkspace(encounterMatch[1], encounterMatch[2]);
   else if (match) renderPatientPage(match[1]);
-  else renderPatientList();
+  else if (activeHash === "#/patients") renderPatientList();
+  else renderHomeDashboard();
   bindActions();
   app.focus({ preventScroll: true });
 }
