@@ -1242,7 +1242,7 @@ async function openAttachment(attachment) {
 
 function renderPatientList() {
   app.innerHTML = `
-    <section class="page-head">
+    <section class="page-head patient-list-head">
       <div>
         <h1>Пациенты</h1>
         <p class="eyebrow">${state.patients.length} пациентов</p>
@@ -1252,7 +1252,7 @@ function renderPatientList() {
         <button class="button" type="button" data-open-patient-form>+ Добавить пациента</button>
       </div>
     </section>
-    <section class="toolbar" aria-label="Поиск пациентов">
+    <section class="toolbar patient-directory-toolbar" aria-label="Поиск пациентов">
       <div class="field search-field">
         <label for="patientSearch">Поиск пациента по ФИО</label>
         <input id="patientSearch" type="search" value="${escapeHtml(state.query)}" placeholder="Поиск пациента по ФИО" autocomplete="off" />
@@ -1924,21 +1924,33 @@ function renderPatientResults() {
   if (!hint || !results) return;
   hint.textContent = query ? (patients.length ? `Найдено: ${patients.length}` : "Совпадений нет") : "";
   results.innerHTML = patients.length
-    ? `<section class="grid">${patients.map(renderPatientCard).join("")}</section>`
-    : `<section class="state-panel"><h2>Пациенты не найдены</h2><p>Проверьте написание ФИО или добавьте нового пациента.</p><button class="button" type="button" data-open-patient-form>Добавить пациента</button></section>`;
+    ? `<section class="patient-directory" aria-label="Список пациентов">
+        <div class="patient-directory-header" aria-hidden="true">
+          <span>Пациент</span>
+          <span>Возраст / дата рождения</span>
+          <span>Последний приём</span>
+          <span></span>
+        </div>
+        <div class="patient-directory-rows">${patients.map(renderPatientCard).join("")}</div>
+      </section>`
+    : `<section class="state-panel patient-empty-state"><h2>${query ? "Пациенты не найдены" : "Пациентов пока нет"}</h2><p>${query ? "Проверьте написание ФИО или добавьте нового пациента." : "Добавьте первого пациента, чтобы начать вести картотеку."}</p><button class="button" type="button" data-open-patient-form>+ Добавить пациента</button></section>`;
   bindPatientFormButtons(results);
 }
 
 function renderPatientCard(patient) {
   const visit = latestVisit(patient.id);
+  const birth = patient.birthDate ? formatDate(patient.birthDate) : "дата рождения не указана";
+  const age = patient.birthDate ? `${calculateAge(patient.birthDate)} лет` : "возраст не указан";
+  const lastVisit = visit ? formatShortDate(visit.date) : "обращений нет";
   return `
     <a class="patient-card" href="#/patient/${patient.id}">
       <div class="patient-avatar" aria-hidden="true">${escapeHtml(initials(patient.fullName))}</div>
       <div class="patient-card-main">
         <div class="patient-name">${escapeHtml(patient.fullName)}</div>
-        <div class="patient-meta">${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}</div>
-        <div class="patient-last">Последний прием: ${visit ? formatShortDate(visit.date) : "обращений нет"}</div>
+        <div class="patient-meta mobile-only">${escapeHtml(age)} · ${escapeHtml(birth)}</div>
       </div>
+      <div class="patient-meta patient-age">${escapeHtml(age)} · ${escapeHtml(birth)}</div>
+      <div class="patient-last">Последний приём: ${escapeHtml(lastVisit)}</div>
       <span class="chevron" aria-hidden="true">›</span>
     </a>
   `;

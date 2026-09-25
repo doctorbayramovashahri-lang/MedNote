@@ -273,6 +273,33 @@ h3 {
   margin-bottom: var(--s4);
 }
 
+.patient-list-head {
+  margin-bottom: var(--s3);
+}
+
+.patient-list-head .page-actions {
+  gap: var(--s2);
+}
+
+.patient-list-head .button,
+.patient-list-head .ghost-button {
+  min-height: 38px;
+}
+
+.patient-directory-toolbar {
+  max-width: none;
+  margin-bottom: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.patient-directory-toolbar .search-field {
+  max-width: 520px;
+}
+
 .field {
   display: grid;
   gap: var(--s2);
@@ -450,6 +477,43 @@ textarea {
   gap: var(--s3);
 }
 
+.patient-directory {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.patient-directory-header,
+.patient-card {
+  display: grid;
+  grid-template-columns: 42px minmax(260px, 1.3fr) minmax(190px, 0.85fr) minmax(190px, 0.9fr) 20px;
+  column-gap: var(--s4);
+  align-items: center;
+}
+
+.patient-directory-header {
+  min-height: 38px;
+  padding: 0 var(--s4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.patient-directory-header span:first-child {
+  grid-column: 1 / span 2;
+}
+
+.patient-directory-rows {
+  display: block;
+}
+
 .patient-card,
 .visit-card,
 .panel,
@@ -460,20 +524,33 @@ textarea {
 }
 
 .patient-card {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
-  gap: var(--s3);
-  align-items: center;
-  min-height: 92px;
-  padding: var(--s3);
+  width: 100%;
+  min-height: 58px;
+  padding: 8px var(--s4);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   text-decoration: none;
-  animation: content-in var(--motion-normal) var(--ease-standard);
-  transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+  animation: none;
+  transition: background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.patient-card:last-child {
+  border-bottom: 0;
 }
 
 .patient-card:hover {
-  border-color: var(--border-strong);
-  background: #fbfdfc;
+  background: color-mix(in srgb, var(--accent), white 96%);
+}
+
+.patient-directory .patient-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent), white 28%);
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--accent), white 94%);
+}
+
+.patient-directory .patient-card:active {
+  transform: none;
 }
 
 .patient-avatar {
@@ -497,7 +574,7 @@ textarea {
 .patient-name {
   color: var(--text-primary);
   font-size: 0.98rem;
-  font-weight: 680;
+  font-weight: 760;
   line-height: 1.25;
 }
 
@@ -510,12 +587,22 @@ textarea {
 }
 
 .patient-last {
-  margin-top: var(--s1);
+  margin-top: 0;
 }
 
 .chevron {
   color: var(--text-secondary);
   font-size: 1.2rem;
+  justify-self: end;
+}
+
+.mobile-only {
+  display: none;
+}
+
+.patient-empty-state {
+  justify-items: start;
+  padding: var(--s5);
 }
 
 .meta-list {
@@ -2786,8 +2873,54 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .grid {
-    grid-template-columns: 1fr;
+  .patient-list-head .page-actions {
+    justify-content: stretch;
+  }
+
+  .patient-list-head .page-actions .button,
+  .patient-list-head .page-actions .ghost-button {
+    flex: 1 1 100%;
+  }
+
+  .patient-directory-toolbar {
+    padding: var(--s2);
+  }
+
+  .patient-directory-toolbar .search-field {
+    max-width: none;
+  }
+
+  .patient-directory-header {
+    display: none;
+  }
+
+  .patient-card {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: var(--s3);
+    min-height: 74px;
+    padding: var(--s3);
+  }
+
+  .patient-card-main {
+    gap: 2px;
+  }
+
+  .patient-age {
+    display: none;
+  }
+
+  .patient-card .mobile-only {
+    display: block;
+  }
+
+  .patient-last {
+    grid-column: 2;
+  }
+
+  .patient-card .chevron {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
   }
 
   .important-summary,
