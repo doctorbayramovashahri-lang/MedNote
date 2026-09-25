@@ -633,14 +633,27 @@ textarea {
 .patient-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--s4);
+  gap: var(--s3);
   align-items: center;
-  padding: var(--s4);
-  margin-bottom: var(--s4);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--surface);
   animation: content-in var(--motion-normal) var(--ease-standard);
+}
+
+.patient-card-head {
+  margin-bottom: var(--s3);
+}
+
+.patient-card-head h1 {
+  max-width: 36ch;
+}
+
+.patient-card-head p:not(.eyebrow) {
+  margin-top: 2px;
+  color: var(--text-secondary);
 }
 
 .patient-actions {
@@ -707,21 +720,23 @@ textarea {
 
 .patient-identity {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   gap: var(--s3);
-  align-items: start;
+  align-items: center;
   min-width: 0;
 }
 
 .patient-identity .patient-avatar {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
 }
 
-.patient-identity h1 {
+.patient-identity h2 {
   margin-bottom: var(--s1);
   max-width: 44ch;
-  line-height: 1.16;
+  color: var(--text-primary);
+  font-size: 1.18rem;
+  line-height: 1.18;
 }
 
 .patient-layout {
@@ -733,9 +748,12 @@ textarea {
 
 .profile-read {
   display: grid;
-  gap: var(--s4);
-  margin-bottom: var(--s4);
+  gap: var(--s3);
   animation: content-in var(--motion-normal) var(--ease-standard);
+}
+
+.patient-card-layout {
+  grid-template-columns: minmax(280px, 0.36fr) minmax(0, 1fr);
 }
 
 .contact-line {
@@ -776,19 +794,25 @@ textarea {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .metric-item {
   display: grid;
   gap: 2px;
   align-content: start;
-  padding: var(--s3) var(--s4);
+  padding: var(--s3);
   border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
+.metric-item:nth-child(2n),
 .metric-item:last-child {
   border-right: 0;
+}
+
+.metric-item:nth-last-child(-n + 2) {
+  border-bottom: 0;
 }
 
 .metric-item span,
@@ -831,18 +855,19 @@ textarea {
 
 .profile-section {
   display: grid;
-  gap: var(--s3);
-  padding: var(--s4);
+  gap: var(--s2);
+  padding: var(--s3);
 }
 
-.important-section {
-  gap: var(--s4);
+.profile-section h2 {
+  font-size: 0.94rem;
+  line-height: 1.2;
 }
 
 .important-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s4) var(--s5);
+  grid-template-columns: 1fr;
+  gap: var(--s3);
 }
 
 .important-group {
@@ -854,9 +879,9 @@ textarea {
 
 .important-allergy {
   gap: var(--s2);
-  padding: var(--s3);
+  padding: var(--s2);
   border: 1px solid #ead8c5;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: #fffaf4;
 }
 
@@ -910,16 +935,16 @@ textarea {
 .important-text {
   margin: 0;
   color: #31413d;
-  font-size: 0.92rem;
-  line-height: 1.5;
+  font-size: 0.88rem;
+  line-height: 1.45;
   white-space: pre-wrap;
 }
 
 .about-note p {
   margin: 0;
   color: #354641;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  font-size: 0.88rem;
+  line-height: 1.5;
   white-space: pre-wrap;
 }
 
@@ -954,7 +979,8 @@ textarea {
 
 .history {
   display: grid;
-  gap: var(--s3);
+  gap: var(--s2);
+  min-width: 0;
 }
 
 .section-head {
@@ -967,7 +993,8 @@ textarea {
 .visit-card {
   display: grid;
   gap: var(--s3);
-  padding: var(--s4);
+  padding: var(--s3);
+  border-radius: var(--radius-md);
   animation: content-in var(--motion-normal) var(--ease-standard);
 }
 
@@ -976,6 +1003,12 @@ textarea {
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+.visit-head h3 {
+  font-size: 1rem;
 }
 
 .visit-head .eyebrow {
@@ -985,6 +1018,7 @@ textarea {
 
 .visit-card .action-row {
   padding-top: var(--s1);
+  border-top: 1px solid var(--border);
 }
 
 .visit-card .ghost-button {
@@ -1005,6 +1039,101 @@ textarea {
   font-size: 0.78rem;
   font-weight: 720;
   white-space: nowrap;
+}
+
+.badge.muted {
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+
+.visit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s1);
+}
+
+.visit-clinical-grid {
+  display: grid;
+  gap: var(--s2);
+}
+
+.visit-clinical-section {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.visit-clinical-section:last-child {
+  border-bottom: 0;
+}
+
+.visit-clinical-section h4 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.visit-clinical-section p {
+  margin: 0;
+  color: #263632;
+  font-size: 0.9rem;
+  line-height: 1.48;
+  white-space: pre-wrap;
+}
+
+.visit-investigation-list {
+  display: grid;
+}
+
+.visit-investigation-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr);
+  gap: var(--s3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.visit-investigation-row:last-child {
+  border-bottom: 0;
+}
+
+.visit-investigation-row span {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.visit-investigation-row strong {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 560;
+  overflow-wrap: anywhere;
+}
+
+.visit-diagnosis-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: baseline;
+}
+
+.icd-chip {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent), white 48%);
+  border-radius: 999px;
+  padding: 0 var(--s2);
+  background: #e9f7f4;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 760;
 }
 
 .note-text {
@@ -2869,8 +2998,22 @@ textarea {
 @media (max-width: 720px) {
   .page-head,
   .patient-hero,
+  .patient-card-layout,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .patient-hero {
+    align-items: stretch;
+  }
+
+  .patient-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .patient-action-menu summary {
+    width: 100%;
   }
 
   .patient-list-head .page-actions {
@@ -2935,6 +3078,29 @@ textarea {
 
   .metric-item:last-child {
     border-bottom: 0;
+  }
+
+  .visit-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .visit-badges {
+    justify-content: flex-start;
+  }
+
+  .visit-investigation-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .attachment-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .attachment-row .action-row {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 
   .button,

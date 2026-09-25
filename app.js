@@ -2014,12 +2014,103 @@ function renderAbout(patient) {
   if (!patient.about?.trim()) return "";
   return `
     <section class="profile-section about-note">
-      <h2><span aria-hidden="true">✎</span>О пациенте</h2>
+      <h2>О пациенте</h2>
       <p>${escapeHtml(patient.about)}</p>
     </section>
   `;
 }
 
+function parseVisitNoteSections(note = "") {
+  const labels = new Map([
+    ["анамнез", ["anamnesis", "Что происходит / анамнез"]],
+    ["объективно", ["objective", "Объективно"]],
+    ["обследования", ["investigations", "Обследования"]],
+    ["диагноз", ["diagnosis", "Диагноз"]],
+    ["решение", ["decision", "Решение / лечение"]],
+    ["дальше", ["next", "Дальше"]]
+  ]);
+  const sections = [];
+  let current = null;
+  let hasMarker = false;
+  note.split(/\n/).forEach((line) => {
+    const trimmed = line.trim();
+    const marker = trimmed.match(/^([А-Яа-яЁё ]+):$/);
+    const match = marker ? labels.get(marker[1].trim().toLowerCase()) : null;
+    if (match) {
+      hasMarker = true;
+      current = { key: match[0], label: match[1], lines: [] };
+      sections.push(current);
+      return;
+    }
+    if (!current) {
+      current = { key: "raw", label: "Что происходит", lines: [] };
+      sections.push(current);
+    }
+    current.lines.push(line);
+  });
+  return hasMarker ? sections.filter((section) => section.lines.some((line) => line.trim())) : [];
+}
+
+function renderRawVisitNote(visit) {
+  return `
+    <section class="visit-clinical-section">
+      <h4>Что происходит</h4>
+      <p>${escapeHtml(visit.note || "Осмотр не заполнен")}</p>
+    </section>
+  `;
+}
+
+function renderDecisionContent(decision) {
+  if (!decision?.trim()) return "";
+  const icdMatch = decision.match(/\b([A-ZА-Я]\d{2}(?:\.\d+)?)\b/i);
+  return `
+    <div class="visit-diagnosis-line">
+      ${icdMatch ? `<span class="icd-chip">${escapeHtml(icdMatch[1])}</span>` : ""}
+      <p>${escapeHtml(decision)}</p>
+    </div>
+  `;
+}
+
+function hasVisitNoteMarker(note = "", markers = []) {
+  const normalized = new Set(markers.map((marker) => marker.toLowerCase()));
+  return note.split(/\n/).some((line) => {
+    const match = line.trim().match(/^([А-Яа-яЁё ]+):$/);
+    return match ? normalized.has(match[1].trim().toLowerCase()) : false;
+  });
+}
+
+function renderVisitSections(visit) {
+  const sections = parseVisitNoteSections(visit.note || "");
+  if (!sections.length) return renderRawVisitNote(visit);
+  return sections
+    .map((section) => {
+      const text = section.lines.join("\n").trim();
+      if (!text) return "";
+      if (section.key === "investigations") {
+        return `<section class="visit-clinical-section"><h4>${section.label}</h4>${renderInvestigationLines(section.lines)}</section>`;
+      }
+      return `<section class="visit-clinical-section"><h4>${section.label}</h4><p>${escapeHtml(text)}</p></section>`;
+    })
+    .join("");
+}
+
+function renderInvestigationLines(lines) {
+  const rows = lines
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter(Boolean)
+    .map((line) => {
+      const separator = line.indexOf(":");
+      const name = separator > 0 ? line.slice(0, separator).trim() : line;
+      const value = separator > 0 ? line.slice(separator + 1).trim() : "";
+      return `
+        <div class="visit-investigation-row">
+          <span>${escapeHtml(name)}</span>
+          <strong>${escapeHtml(value || "см. описание")}</strong>
+        </div>
+      `;
+    });
+  return rows.length ? `<div class="visit-investigation-list">${rows.join("")}</div>` : "";
+}
 function renderPatientPage(patientId) {
   const foundPatient = state.patients.find((item) => item.id === patientId);
   if (!foundPatient) {
@@ -2032,10 +2123,11 @@ function renderPatientPage(patientId) {
   const latest = visits[0];
   const nextStep = latest?.nextStep ? `${latest.nextStep}${latest.nextStepTiming ? ` · ${latest.nextStepTiming}` : ""}` : "";
   app.innerHTML = `
-    <section class="page-head">
+    <section class="page-head patient-card-head">
       <div>
         <p class="eyebrow"><a href="#/">Пациенты</a> / карточка пациента</p>
         <h1>Карточка пациента</h1>
+        <p>${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}${patient.sex ? ` · ${sexLabel(patient.sex)}` : ""}</p>
       </div>
       <button class="button" type="button" data-start-encounter="${patient.id}">${draft ? "Продолжить обращение" : "Новое обращение"}</button>
     </section>
@@ -2043,9 +2135,9 @@ function renderPatientPage(patientId) {
       <div class="patient-identity">
         <div class="patient-avatar" aria-hidden="true">${escapeHtml(initials(patient.fullName))}</div>
         <div>
-          <h1>${escapeHtml(patient.fullName)}</h1>
           <p class="patient-meta">${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}${patient.sex ? ` · ${sexLabel(patient.sex)}` : ""}</p>
-          <p class="patient-last">Последний прием: ${latest ? formatShortDate(latest.date) : "обращений нет"}</p>
+          <h2>${escapeHtml(patient.fullName)}</h2>
+          <p class="patient-last">Последний приём: ${latest ? formatShortDate(latest.date) : "обращений нет"}</p>
           ${renderContactLine(patient)}
         </div>
       </div>
@@ -2059,22 +2151,12 @@ function renderPatientPage(patientId) {
         </details>
       </div>
     </section>
-    <section class="profile-read" aria-label="Профиль пациента">
-      ${renderMetricStrip(patient)}
-      ${renderImportant(patient)}
-      ${renderAbout(patient)}
-      ${nextStep ? `<section class="profile-section next-step-card"><h2>Дальше</h2><p>${escapeHtml(nextStep)}</p></section>` : ""}
-    </section>
-    <section class="patient-layout">
-      <aside class="panel patient-summary">
-        <h2>Данные пациента</h2>
-        <dl class="meta-list">
-          <div class="meta-row"><dt>Возраст</dt><dd><strong>${calculateAge(patient.birthDate)} лет</strong></dd></div>
-          <div class="meta-row"><dt>Дата рождения</dt><dd><strong>${formatDate(patient.birthDate)}</strong></dd></div>
-          <div class="meta-row"><dt>Email</dt><dd><strong>${patient.email ? escapeHtml(patient.email) : "Не указан"}</strong></dd></div>
-          <div class="meta-row"><dt>Последнее</dt><dd><strong>${latest ? formatDate(latest.date) : "Обращений нет"}</strong></dd></div>
-        </dl>
-        <button class="ghost-button" type="button" data-open-patient-form="${patient.id}">Редактировать</button>
+    <section class="patient-layout patient-card-layout">
+      <aside class="profile-read" aria-label="Профиль пациента">
+        ${renderMetricStrip(patient)}
+        ${renderImportant(patient)}
+        ${nextStep ? `<section class="profile-section next-step-card"><h2>Дальше</h2><p>${escapeHtml(nextStep)}</p></section>` : ""}
+        ${renderAbout(patient)}
       </aside>
       <section class="history">
         <div class="section-head">
@@ -2093,6 +2175,7 @@ function renderPatientPage(patientId) {
 
 function renderVisitCard(visit) {
   const attachments = state.attachments.filter((item) => item.visitId === visit.id);
+  const nextStep = visit.nextStep ? `${visit.nextStep}${visit.nextStepTiming ? ` · ${visit.nextStepTiming}` : ""}` : "";
   return `
     <article class="visit-card">
       <div class="visit-head">
@@ -2100,13 +2183,21 @@ function renderVisitCard(visit) {
           <h3>${formatDate(visit.date)}</h3>
           <p class="eyebrow">Создано ${new Date(visit.createdAt).toLocaleDateString("ru-RU")}</p>
         </div>
-        <span class="badge">${visitFormatLabel(visit.format)}</span>
+        <div class="visit-badges">
+          <span class="badge">${visitFormatLabel(visit.format)}</span>
+          ${visit.status ? `<span class="badge muted">${visit.status === "completed" ? "Завершено" : escapeHtml(visit.status)}</span>` : ""}
+        </div>
       </div>
-      <p class="note-text">${escapeHtml(visit.note || "Осмотр не заполнен")}</p>
-      ${visit.decision ? `<div class="visit-detail"><span>Решение</span><p>${escapeHtml(visit.decision)}</p></div>` : ""}
-      ${visit.nextStep ? `<div class="visit-detail"><span>Дальше</span><p>${escapeHtml(visit.nextStep)}${visit.nextStepTiming ? ` · ${escapeHtml(visit.nextStepTiming)}` : ""}</p></div>` : ""}
-      <div class="attachments">
-        ${attachments.length ? attachments.map((item) => renderAttachment(item, true)).join("") : `<p class="eyebrow">Вложений нет</p>`}
+      <div class="visit-clinical-grid">
+        ${renderVisitSections(visit)}
+        ${visit.decision && !hasVisitNoteMarker(visit.note, ["Диагноз", "Решение"]) ? `<section class="visit-clinical-section"><h4>Решение / лечение</h4>${renderDecisionContent(visit.decision)}</section>` : ""}
+        ${nextStep && !hasVisitNoteMarker(visit.note, ["Дальше"]) ? `<section class="visit-clinical-section visit-next"><h4>Дальше</h4><p>${escapeHtml(nextStep)}</p></section>` : ""}
+        <section class="visit-clinical-section visit-attachments">
+          <h4>Вложения</h4>
+          <div class="attachments">
+            ${attachments.length ? attachments.map((item) => renderAttachment(item, true)).join("") : `<p class="eyebrow">Вложений нет</p>`}
+          </div>
+        </section>
       </div>
       <div class="action-row">
         <button class="ghost-button" type="button" data-edit-visit="${visit.id}">Редактировать обращение</button>
