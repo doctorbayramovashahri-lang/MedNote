@@ -87,6 +87,12 @@ function escapeHtml(value = "") {
     .replaceAll('"', "&quot;");
 }
 
+function shortTextPreview(value = "", limit = 180) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > limit ? `${text.slice(0, limit).trim()}…` : text;
+}
+
 function visitFormatLabel(format) {
   if (format === "phone") return "Телефон / сообщение";
   return format === "online" ? "Онлайн" : "В клинике";
@@ -2222,43 +2228,71 @@ function renderEncounterWorkspace(patientId, visitId) {
     .sort(compareVisitsDesc);
   const lastVisit = completedVisits[0];
   const attachments = state.attachments.filter((item) => item.visitId === visit.id);
+  const importantSummary = renderImportant(patient);
+  const allergiesSummary = patient.medicalContext.allergies ? escapeHtml(patient.medicalContext.allergies) : "Не указано";
+  const lastVisitPreview = shortTextPreview(lastVisit?.note || lastVisit?.decision || "", 220);
+  const draftLabel = visit.status === "draft" ? "Черновик обращения" : visit.status === "completed" ? "Завершённое обращение" : escapeHtml(visit.status);
   app.innerHTML = `
     <section class="encounter-workspace">
       <header class="encounter-header">
         <div>
           <p class="eyebrow encounter-back"><a href="#/patient/${patient.id}">← Карточка пациента</a></p>
           <h1>${escapeHtml(patient.fullName)}</h1>
-          <p class="patient-meta">${formatDate(visit.date)} · начато ${new Date(visit.startedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>
-        </div>
-        <div class="encounter-header-actions">
-          <span class="save-state" data-save-state>Черновик сохранён</span>
-          <button class="button" type="button" data-complete-encounter="${visit.id}">Завершить обращение</button>
+          <p class="patient-meta">${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)} · ${draftLabel}</p>
         </div>
       </header>
+      <section class="encounter-patient-context" aria-label="Контекст пациента">
+        <div>
+          <span>Приём</span>
+          <strong>${formatDate(visit.date)}</strong>
+          <small>начато ${new Date(visit.startedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</small>
+        </div>
+        <div>
+          <span>Важное</span>
+          <strong>${allergiesSummary}</strong>
+          <small>${patient.medicalContext.conditions ? escapeHtml(patient.medicalContext.conditions) : "состояния не указаны"}</small>
+        </div>
+        <div>
+          <span>Последний контекст</span>
+          <strong>${lastVisit ? `${formatDate(lastVisit.date)} · ${visitFormatLabel(lastVisit.format)}` : "Нет завершённых обращений"}</strong>
+          <small>${lastVisit?.nextStep ? escapeHtml(lastVisit.nextStep) : "следующий шаг не указан"}</small>
+        </div>
+      </section>
       <section class="encounter-layout">
         <section class="encounter-main" aria-label="Текущее обращение">
-          <div class="field">
-            <span class="label">Тип контакта</span>
+          <section class="encounter-section encounter-format-section">
+            <div>
+              <h2>Формат</h2>
+              <p>Как проходит текущий контакт</p>
+            </div>
             <div class="segmented" role="radiogroup" aria-label="Тип контакта">
               ${["clinic", "online", "phone"].map((format) => `<label><input type="radio" name="encounterFormat" value="${format}" ${visit.format === format ? "checked" : ""}> <span><span class="desktop-label">${visitFormatLabel(format)}</span><span class="mobile-label">${format === "phone" ? "Телефон" : visitFormatLabel(format)}</span></span></label>`).join("")}
             </div>
-          </div>
-          <div class="form-grid">
+          </section>
+          <section class="encounter-section encounter-note-section">
             <div class="field full">
               <label for="encounterNote">Что происходит</label>
               <textarea id="encounterNote" data-encounter-field="note" placeholder="Жалобы, изменения, результаты, наблюдения">${escapeHtml(visit.note)}</textarea>
               <span class="hint"></span>
             </div>
+          </section>
+          <section class="encounter-section encounter-decision-section">
             <div class="field full">
-              <label for="encounterDecision">Решение</label>
+              <label for="encounterDecision">Решение / лечение</label>
               <textarea id="encounterDecision" data-encounter-field="decision" placeholder="Что решили / что сделал врач">${escapeHtml(visit.decision)}</textarea>
               <span class="hint"></span>
+            </div>
+          </section>
+          <section class="encounter-section encounter-next-section">
+            <div>
+              <h2>Дальше</h2>
+              <p>Что должно произойти после приёма</p>
             </div>
             <div class="next-step-fields full">
               <div class="field">
                 <label for="encounterNextStep">Дальше</label>
                 <input id="encounterNextStep" data-encounter-field="nextStep" value="${escapeHtml(visit.nextStep)}" placeholder="Например: контроль ТТГ" />
-                <span class="hint">Что должно произойти после обращения</span>
+                <span class="hint">Действие, контроль или повторный контакт</span>
               </div>
               <div class="field">
                 <label for="encounterNextTiming">Ориентир</label>
@@ -2266,8 +2300,8 @@ function renderEncounterWorkspace(patientId, visitId) {
                 <span class="hint">Дата, срок или условие</span>
               </div>
             </div>
-          </div>
-          <section class="encounter-documents">
+          </section>
+          <section class="encounter-section encounter-documents">
             <div class="section-head">
               <h2>Документы</h2>
               <label class="ghost-button">
@@ -2279,6 +2313,10 @@ function renderEncounterWorkspace(patientId, visitId) {
               ${attachments.length ? attachments.map((item) => renderAttachment(item, true)).join("") : `<p class="eyebrow">Документы пока не добавлены</p>`}
             </div>
           </section>
+          <div class="encounter-footer-actions">
+            <span class="save-state" data-save-state-mirror>Черновик сохранён</span>
+            <button class="button" type="button" data-complete-encounter="${visit.id}">Завершить обращение</button>
+          </div>
           <div class="mobile-complete-flow">
             <button class="button" type="button" data-complete-encounter="${visit.id}">Завершить обращение</button>
           </div>
@@ -2286,7 +2324,7 @@ function renderEncounterWorkspace(patientId, visitId) {
         <aside class="encounter-context">
           <details>
             <summary>Контекст пациента</summary>
-            ${renderImportant(patient) || `<p class="eyebrow">Важный контекст не заполнен</p>`}
+            ${importantSummary || `<p class="eyebrow">Важный контекст не заполнен</p>`}
             ${
               lastVisit?.nextStep
                 ? `<section class="context-block context-next-block"><h2>На чём остановились</h2><p>${escapeHtml(lastVisit.nextStep)}${lastVisit.nextStepTiming ? ` · ${escapeHtml(lastVisit.nextStepTiming)}` : ""}</p></section>`
@@ -2296,7 +2334,7 @@ function renderEncounterWorkspace(patientId, visitId) {
               <h2>Последний контакт</h2>
               ${
                 lastVisit
-                  ? `<p><strong>${formatDate(lastVisit.date)} · ${visitFormatLabel(lastVisit.format)}</strong></p><p>${escapeHtml(lastVisit.note || "Без заметки")}</p>`
+                  ? `<p><strong>${formatDate(lastVisit.date)} · ${visitFormatLabel(lastVisit.format)}</strong></p>${lastVisitPreview ? `<p class="context-preview">${escapeHtml(lastVisitPreview)}</p>` : `<p class="eyebrow">Краткая заметка не заполнена</p>`}`
                   : `<p class="eyebrow">Завершённых обращений пока нет</p>`
               }
             </section>
@@ -2821,7 +2859,7 @@ function bindPatientFormButtons(root) {
 }
 
 function bindEncounterWorkspace(patientId, visitId) {
-  const saveState = document.querySelector("[data-save-state]");
+  const saveStateTargets = document.querySelectorAll("[data-save-state], [data-save-state-mirror]");
   const contextDetails = document.querySelector(".encounter-context details");
   let currentVisit = normalizeVisit(state.visits.find((item) => item.id === visitId) || {});
   let saveTimer = null;
@@ -2853,24 +2891,26 @@ function bindEncounterWorkspace(patientId, visitId) {
     state.visits = state.visits.map((item) => (item.id === visitId ? currentVisit : item));
   };
 
+  const setSaveStateText = (text) => {
+    saveStateTargets.forEach((target) => {
+      target.textContent = text;
+    });
+  };
+
   const setConflictState = () => {
     conflictLocked = true;
     if (saveTimer) window.clearTimeout(saveTimer);
-    if (saveState) {
-      saveState.textContent = "Запись изменилась в другой вкладке или на другом устройстве. Обновите данные перед продолжением.";
-    }
+    setSaveStateText("Запись изменилась в другой вкладке или на другом устройстве. Обновите данные перед продолжением.");
   };
 
   const setSaveErrorState = () => {
-    if (saveState) {
-      saveState.textContent = "Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.";
-    }
+    setSaveStateText("Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.");
   };
 
   const saveNow = async (status = "draft") => {
     if (saveTimer) window.clearTimeout(saveTimer);
     if (conflictLocked) return null;
-    if (saveState) saveState.textContent = "Сохранение…";
+    setSaveStateText("Сохранение…");
     try {
       const savedVisit = await repository.updateVisit(visitId, {
         ...collect(),
@@ -2886,7 +2926,7 @@ function bindEncounterWorkspace(patientId, visitId) {
       setSaveErrorState();
       throw error;
     }
-    if (saveState) saveState.textContent = status === "completed" ? "Сохранено" : "Черновик сохранён";
+    setSaveStateText(status === "completed" ? "Сохранено" : "Черновик сохранён");
     return currentVisit;
   };
 
@@ -2897,7 +2937,7 @@ function bindEncounterWorkspace(patientId, visitId) {
 
   const scheduleSave = () => {
     if (conflictLocked) return;
-    if (saveState) saveState.textContent = "Сохранение…";
+    setSaveStateText("Сохранение…");
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => queueSave("draft").catch(() => null), 700);
   };
@@ -2923,7 +2963,7 @@ function bindEncounterWorkspace(patientId, visitId) {
       } catch (error) {
         input.disabled = false;
         input.value = "";
-        if (saveState) saveState.textContent = repositoryMessage(error, "Не удалось добавить документ");
+        setSaveStateText(repositoryMessage(error, "Не удалось добавить документ"));
       }
     });
   });
@@ -2937,7 +2977,7 @@ function bindEncounterWorkspace(patientId, visitId) {
         if (conflictLocked) return;
         const data = collect();
         if (!data.note && !data.decision && !data.nextStep && !state.attachments.some((item) => item.visitId === visitId)) {
-          if (saveState) saveState.textContent = "Добавьте запись, решение, следующий шаг или документ";
+          setSaveStateText("Добавьте запись, решение, следующий шаг или документ");
           return;
         }
         const completedVisit = await queueSave("completed");
