@@ -1,0 +1,27 @@
+{
+  "name": "01_standard_protocol",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "standard" }],
+    "fullText": "ООО \"ТестМед\"\nФИО: Петрова Анна Игоревна\nДата рождения: 12.04.1985 (41 год)\nМедкарта №A-100\nПРОТОКОЛ от 20.09.2026\nАнамнез: Жалоб нет.\nПо данным обследования:\nТТГ от 18.09.2026: 2,10\nОАК: без отклонений\nОбъективный статус\nРост: 170 см; масса тела: 65 кг; индекс массы тела 22,5\nДиагноз по МКБ: E03.9\nКлинический диагноз: Гипотиреоз\nЛечение на приеме: Левотироксин 75 мкг утром.\nСледующий визит: контроль через 3 месяца\nС планом лечения ознакомлен(а): Петрова А.И.\nВрач: Иванов П.П."
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Петрова Анна Игоревна",
+      "patient.birthDate.value": "1985-04-12",
+      "document.date.value": "2026-09-20",
+      "anthropometry.heightCm.value": "170",
+      "anthropometry.weightKg.value": "65",
+      "clinical.icdCode.value": "E03.9",
+      "clinical.clinicalDiagnosis.value": "Гипотиреоз",
+      "clinical.nextStep.value": "контроль через 3 месяца"
+    },
+    "investigations": [
+      { "type": "tsh", "value": "2.10", "date": "2026-09-18" },
+      { "type": "cbc", "value": "Без отклонений" }
+    ]
+  },
+  "mustNot": [
+    { "path": "clinical.nextStep.value", "contain": "Врач" }
+  ]
+}

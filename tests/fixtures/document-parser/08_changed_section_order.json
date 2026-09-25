@@ -1,0 +1,18 @@
+{
+  "name": "08_changed_section_order",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "changed section order" }],
+    "fullText": "Пациент: Мельникова Дарья Олеговна\nДата рождения: 17.01.1992\nМедкарта №H-800\nПРОТОКОЛ от 05.09.2026\nДиагноз по МКБ: E04.1\nКлинический диагноз: Узловой зоб\nЛечение: Наблюдение, контроль УЗИ.\nПо данным обследования:\nУЗИ щитовидной железы: узел левой доли 8 мм\nОбъективный статус рост: 172 см; масса тела: 69 кг; индекс массы тела 23,3\nСледующий визит: после УЗИ"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Мельникова Дарья Олеговна",
+      "clinical.icdCode.value": "E04.1",
+      "clinical.clinicalDiagnosis.value": "Узловой зоб"
+    },
+    "investigations": [
+      { "type": "ultrasound_thyroid", "value": null }
+    ]
+  }
+}

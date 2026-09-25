@@ -1,0 +1,20 @@
+{
+  "name": "18_partial_document",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "partial document" }],
+    "fullText": "ФИО: Тимофеева Юлия Денисовна\nДата рождения: 13.12.1995\nМедкарта №R-1800\nПРОТОКОЛ от 23.09.2026\nПо данным обследования:\nТТГ: 2,2\nОАК: без отклонений"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Тимофеева Юлия Денисовна",
+      "clinical.icdCode.value": null,
+      "clinical.nextStep.value": null
+    },
+    "warningsContain": ["Диагноз не найден"],
+    "investigations": [
+      { "type": "tsh", "value": "2.2" },
+      { "type": "cbc", "value": "Без отклонений" }
+    ]
+  }
+}

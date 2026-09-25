@@ -1,0 +1,22 @@
+{
+  "name": "06_footer_noise",
+  "input": {
+    "method": "ocr",
+    "pages": [{ "pageNumber": 1, "text": "ocr noisy footer" }],
+    "fullText": "ФИО: Орлова Наталья Романовна\nДата рождения: 30.05.1975\nМедкарта №F-600\nПРОТОКОЛ от 01.07.2026\nАнамнез: наблюдается у эндокринолога.\nПо данным обследования: ОАК: без отклонений\nДиагноз по МКБ: E78.4\nКлинический диагноз: Дислипидемия\nЛечение на приеме: Диета, контроль липидов.\nСледующий визит: после обследования\nС планом лечения ознакомлен(а): Орлова Н.Р.\nВрач: Белова А.А.\nм.п."
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Орлова Наталья Романовна",
+      "clinical.nextStep.value": "после обследования",
+      "clinical.icdCode.value": "E78.4"
+    },
+    "investigations": [
+      { "type": "cbc", "value": "Без отклонений" }
+    ]
+  },
+  "mustNot": [
+    { "path": "clinical.nextStep.value", "contain": "Врач" },
+    { "path": "clinical.nextStep.value", "contain": "м.п" }
+  ]
+}

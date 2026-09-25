@@ -1,0 +1,19 @@
+{
+  "name": "15_long_biochemistry",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "long biochemistry" }],
+    "fullText": "ФИО: Сергеева Вера Ивановна\nДата рождения: 01.01.1981\nМедкарта №O-1500\nПРОТОКОЛ от 20.09.2026\nПо данным обследования:\nБ/х анализ крови: холестерин 5,8; ЛПНП 3,6; кальций 2,44; АЛТ 22; АСТ 19\nДиагноз по МКБ: E78.4\nКлинический диагноз: Дислипидемия\nЛечение: диета.\nСледующий визит: после контроля липидов"
+  },
+  "expected": {
+    "fields": {
+      "clinical.icdCode.value": "E78.4"
+    },
+    "investigations": [
+      { "type": "biochemistry", "value": null }
+    ]
+  },
+  "mustNot": [
+    { "investigation": { "type": "biochemistry" }, "value": "5.8" }
+  ]
+}

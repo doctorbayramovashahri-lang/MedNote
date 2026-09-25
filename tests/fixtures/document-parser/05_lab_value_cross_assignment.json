@@ -1,0 +1,23 @@
+{
+  "name": "05_lab_value_cross_assignment",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "lab cross assignment" }],
+    "fullText": "Пациент: Волкова Ирина Павловна\nДата рождения: 19.12.1982\nМедкарта №E-500\nПРОТОКОЛ от 09.09.2026\nПо данным обследования:\nТТГ\nАТ-ТПО: 186\nСвТ4: 10,2\nБ/х анализ крови: холестерин 5,9, кальций 2,41\nОАК: без отклонений\nОбъективный статус рост: 166 см; масса тела: 70 кг; индекс массы тела 25,4\nДиагноз по МКБ: E03.9\nКлинический диагноз: Гипотиреоз\nЛечение: Продолжить терапию.\nСледующий визит: после контроля ТТГ"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Волкова Ирина Павловна",
+      "document.date.value": "2026-09-09"
+    },
+    "investigations": [
+      { "type": "tsh", "value": null },
+      { "type": "anti_tpo", "value": "186" },
+      { "type": "free_t4", "value": "10.2" },
+      { "type": "biochemistry", "value": null }
+    ]
+  },
+  "mustNot": [
+    { "investigation": { "type": "tsh" }, "value": "186" }
+  ]
+}

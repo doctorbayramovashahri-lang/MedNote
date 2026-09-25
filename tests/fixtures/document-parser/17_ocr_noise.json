@@ -1,0 +1,23 @@
+{
+  "name": "17_ocr_noise",
+  "input": {
+    "method": "ocr",
+    "pages": [{ "pageNumber": 1, "text": "ocr noise" }],
+    "fullText": "ФИО: Лебедева Алла Юрьевна\nДата рождения: 08.08.1983\nМедкарта №Q-1700\nПРОТОКОЛ от 22.09.2026\nПо данным обследования:\nTTГ 6,B0\nСв Т4 1O.2\nАТ-ТПО: 186\nДиагноз по МКБ: E03.9\nКлинический диагноз: Гипотиреоз\nЛечение: контроль.\nСледующий визит: после обследования"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Лебедева Алла Юрьевна"
+    },
+    "investigations": [
+      { "type": "tsh", "value": null, "confidence": "low" },
+      { "type": "free_t4", "value": null, "confidence": "low" },
+      { "type": "anti_tpo", "value": "186" }
+    ],
+    "warningsContain": ["значение требует проверки"]
+  },
+  "mustNot": [
+    { "investigation": { "type": "tsh" }, "value": "6.80" },
+    { "investigation": { "type": "free_t4" }, "value": "10.2" }
+  ]
+}

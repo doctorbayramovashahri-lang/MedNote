@@ -1,0 +1,21 @@
+{
+  "name": "13_two_person_names",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "two person names" }],
+    "fullText": "Врач: Козлов Сергей Павлович, эндокринолог\nПациент: Антонова Лидия Борисовна\nДата рождения: 22.02.1984\nМедкарта №M-1300\nПРОТОКОЛ от 19.09.2026\nПо данным обследования:\nТТГ: 1,90\nДиагноз по МКБ: E03.9\nКлинический диагноз: Гипотиреоз\nЛечение: Без изменений.\nСледующий визит: планово\nС планом лечения ознакомлен(а): Антонова Л.Б."
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Антонова Лидия Борисовна",
+      "document.doctorName.value": "Козлов Сергей Павлович"
+    },
+    "investigations": [
+      { "type": "tsh", "value": "1.90" }
+    ]
+  },
+  "mustNot": [
+    { "path": "patient.fullName.value", "equal": "Козлов Сергей Павлович" },
+    { "path": "patient.fullName.value", "equal": "Антонова Л.Б." }
+  ]
+}

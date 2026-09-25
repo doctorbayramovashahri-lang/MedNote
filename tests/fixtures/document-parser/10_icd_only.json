@@ -1,0 +1,20 @@
+{
+  "name": "10_icd_only",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "icd only" }],
+    "fullText": "Пациент: Крылова Инна Семеновна\nДата рождения: 24.06.1980\nМедкарта №J-1000\nПРОТОКОЛ от 12.09.2026\nПо данным обследования:\nТТГ: 4,10\nДиагноз по МКБ: E03.9\nЛечение: Контроль ТТГ.\nСледующий визит: через 1 месяц"
+  },
+  "expected": {
+    "fields": {
+      "clinical.icdCode.value": "E03.9",
+      "clinical.clinicalDiagnosis.value": null
+    },
+    "investigations": [
+      { "type": "tsh", "value": "4.10" }
+    ]
+  },
+  "mustNot": [
+    { "path": "clinical.clinicalDiagnosis.value", "equal": "Гипотиреоз" }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "03_doctor_before_patient",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "doctor before patient" }],
+    "fullText": "Врач: Смирнов Олег Петрович, эндокринолог\nПациент: Николаева Елена Андреевна\nДата рождения: 05.02.1979\nМедкарта №C-300\nПРОТОКОЛ от 03.09.2026\nПо данным обследования:\nСвТ4 от 01.09.2026: 12,4\nДиагноз по МКБ: E04.1\nКлинический диагноз: Узловой зоб\nЛечение: Наблюдение.\nСледующий визит: контроль УЗИ"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Николаева Елена Андреевна",
+      "patient.birthDate.value": "1979-02-05",
+      "document.doctorName.value": "Смирнов Олег Петрович",
+      "clinical.icdCode.value": "E04.1"
+    },
+    "investigations": [
+      { "type": "free_t4", "value": "12.4" }
+    ]
+  },
+  "mustNot": [
+    { "path": "patient.fullName.value", "equal": "Смирнов Олег Петрович" }
+  ]
+}

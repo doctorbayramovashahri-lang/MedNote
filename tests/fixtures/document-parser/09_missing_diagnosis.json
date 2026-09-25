@@ -1,0 +1,19 @@
+{
+  "name": "09_missing_diagnosis",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "missing diagnosis" }],
+    "fullText": "ФИО: Захарова Полина Ильинична\nДата рождения: 11.11.1991\nМедкарта №I-900\nПРОТОКОЛ от 02.09.2026\nАнамнез: профилактический осмотр.\nПо данным обследования:\nОАК: без отклонений\nЛечение: Рекомендован контроль анализов.\nСледующий визит: по готовности результатов"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Захарова Полина Ильинична",
+      "clinical.icdCode.value": null,
+      "clinical.clinicalDiagnosis.value": null
+    },
+    "warningsContain": ["Диагноз не найден"]
+  },
+  "mustNot": [
+    { "path": "clinical.clinicalDiagnosis.value", "equal": "E03.9" }
+  ]
+}

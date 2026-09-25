@@ -8,6 +8,7 @@ const AUTH_TECHNICAL_DOMAIN = "mednote.local";
 const LOGIN_PATTERN = /^[a-z0-9._-]+$/;
 const STORAGE_ATTACHMENTS_BUCKET = "medical-attachments";
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const DOCUMENT_IMPORT_MAX_BYTES = MAX_ATTACHMENT_BYTES;
 const SIGNED_ATTACHMENT_URL_TTL_SECONDS = 120;
 const PATIENT_SELECT_COLUMNS =
   "id, full_name, birth_date, sex, phone, email, height_cm, allergies, conditions, therapy, context_notes, about, created_at, updated_at";
@@ -1199,7 +1200,10 @@ function renderPatientList() {
         <h1>Пациенты</h1>
         <p class="eyebrow">${state.patients.length} пациентов</p>
       </div>
-      <button class="button" type="button" data-open-patient-form>+ Добавить пациента</button>
+      <div class="page-actions">
+        <button class="ghost-button" type="button" data-open-document-import>Импорт документа</button>
+        <button class="button" type="button" data-open-patient-form>+ Добавить пациента</button>
+      </div>
     </section>
     <section class="toolbar" aria-label="Поиск пациентов">
       <div class="field search-field">
@@ -1214,6 +1218,647 @@ function renderPatientList() {
   document.querySelector("#patientSearch").addEventListener("input", (event) => {
     state.query = event.target.value;
     renderPatientResults();
+  });
+}
+
+function fieldValue(item) {
+  return window.MedNoteDocumentParser?.fieldValue(item) || null;
+}
+
+function normalizeMatchName(value = "") {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findPatientImportMatches(draft) {
+  const fullName = fieldValue(draft.patient.fullName) || "";
+  const birthDate = fieldValue(draft.patient.birthDate) || "";
+  const normalizedName = normalizeMatchName(fullName);
+  const sameName = state.patients.filter((patient) => normalizeMatchName(patient.fullName) === normalizedName);
+  const exact = birthDate ? sameName.filter((patient) => patient.birthDate === birthDate) : [];
+  const warnings = [...draft.warnings];
+  if (sameName.length && !exact.length) warnings.push("Найден пациент с таким ФИО, но другой или отсутствующей датой рождения");
+  if (exact.length > 1) warnings.push("Найдено несколько пациентов с тем же ФИО и датой рождения");
+  return { exact, sameName, warnings };
+}
+
+function formatImportDateSource(item) {
+  const value = fieldValue(item);
+  if (!value) return "";
+  const [year, month, day] = String(value).split("-");
+  const displayDate = year && month && day ? `${day}.${month}.${year}` : String(value);
+  const source = item?.sourceText || "";
+  const sourceDate = displayDate.replace(/\./g, "[./-]");
+  const match = source.match(new RegExp(`(${sourceDate}(?:\\s*\\([^)]*\\))?)`, "i"));
+  return match?.[1] || displayDate;
+}
+
+function importFieldSource(item, options = {}) {
+  if (!item?.sourceText && !fieldValue(item)) return `<span class="hint"></span>`;
+  let source = item.sourceText || "";
+  if (options.kind === "identity-name") {
+    source = fieldValue(item) || source;
+  } else if (options.kind === "identity-date") {
+    source = formatImportDateSource(item) || source;
+  }
+  return source ? `<span class="hint import-source">Источник: ${escapeHtml(source)}</span>` : `<span class="hint"></span>`;
+}
+
+function formatInvestigationDraft(item) {
+  if (!item) return "";
+  const bits = [];
+  if (item.value) bits.push(item.value);
+  if (item.unit) bits.push(item.unit);
+  if (item.referenceRange) bits.push(`(${item.referenceRange})`);
+  return bits.length ? bits.join(" ") : item.rawText || "";
+}
+
+function buildVisitNoteFromDraft(draft) {
+  const parts = [
+    ["Анамнез", fieldValue(draft.clinical.anamnesis)],
+    ["Жалобы", fieldValue(draft.clinical.complaints)],
+    ["Объективно", fieldValue(draft.clinical.objectiveStatus)]
+  ].filter(([, value]) => value);
+  const investigations = draft.investigations?.length
+    ? `Обследования:\n${draft.investigations.map((item) => `- ${item.name}: ${formatInvestigationDraft(item)}`).join("\n")}`
+    : "";
+  return [...parts.map(([label, value]) => `${label}:\n${value}`), investigations].filter(Boolean).join("\n\n");
+}
+
+function buildVisitDecisionFromDraft(draft) {
+  const parts = [
+    fieldValue(draft.clinical.icdCode) ? `МКБ: ${fieldValue(draft.clinical.icdCode)}` : "",
+    fieldValue(draft.clinical.clinicalDiagnosis) ? `Диагноз:\n${fieldValue(draft.clinical.clinicalDiagnosis)}` : "",
+    fieldValue(draft.clinical.treatment) ? `Лечение:\n${fieldValue(draft.clinical.treatment)}` : "",
+    fieldValue(draft.clinical.recommendations) ? `Рекомендации:\n${fieldValue(draft.clinical.recommendations)}` : ""
+  ];
+  return parts.filter(Boolean).join("\n\n");
+}
+
+const ICD_LABELS = {
+  "E78.4": "Другие гиперлипидемии"
+};
+
+function getIcdLabel(code) {
+  return ICD_LABELS[String(code || "").trim().toUpperCase()] || "";
+}
+
+function buildDisplayedClinicalSummary(draft) {
+  return [
+    ["Анамнез", fieldValue(draft.clinical.anamnesis)],
+    ["Жалобы", fieldValue(draft.clinical.complaints)],
+    ["Объективно", fieldValue(draft.clinical.objectiveStatus)]
+  ].filter(([, value]) => value);
+}
+
+function calculateImportBmi(height, weight) {
+  const heightMeters = Number(String(height || "").replace(",", ".")) / 100;
+  const weightKg = Number(String(weight || "").replace(",", "."));
+  if (!heightMeters || !weightKg) return "";
+  const bmi = weightKg / (heightMeters * heightMeters);
+  return Number.isFinite(bmi) ? bmi.toFixed(1).replace(".", ",") : "";
+}
+
+function importReviewSection(title, body) {
+  return `
+    <section class="import-data-section">
+      <div class="import-data-section-head">
+        <h3>${escapeHtml(title)}</h3>
+      </div>
+      ${body}
+    </section>
+  `;
+}
+
+function renderImportReview({ file, draft, extraction }) {
+  const { exact, warnings } = findPatientImportMatches(draft);
+  const patientName = fieldValue(draft.patient.fullName) || "";
+  const birthDate = fieldValue(draft.patient.birthDate) || "";
+  const height = fieldValue(draft.anthropometry.heightCm) || "";
+  const weight = fieldValue(draft.anthropometry.weightKg) || "";
+  const date = fieldValue(draft.document.date) || todayISO();
+  const note = buildVisitNoteFromDraft(draft);
+  const decision = buildVisitDecisionFromDraft(draft);
+  const displayedClinical = buildDisplayedClinicalSummary(draft);
+  const icdCode = fieldValue(draft.clinical.icdCode) || "";
+  const icdLabel = fieldValue(draft.clinical.icdDiagnosis) || getIcdLabel(icdCode);
+  const diagnosis = fieldValue(draft.clinical.clinicalDiagnosis) || "";
+  const treatment = fieldValue(draft.clinical.treatment) || "";
+  const recommendations = fieldValue(draft.clinical.recommendations) || "";
+  const nextStep = fieldValue(draft.clinical.nextStep) || "";
+  const rawNextTiming = fieldValue(draft.clinical.nextVisitTiming) || "";
+  const nextTiming = normalizeMatchName(rawNextTiming) === normalizeMatchName(nextStep) ? "" : rawNextTiming;
+  const createChecked = exact.length === 1 ? "" : "checked";
+  const patientBadge = exact.length ? "Найден пациент" : "Новый пациент";
+  const matchNotice = exact.length
+    ? "Найдено совпадение. Проверьте пациента перед импортом."
+    : "Совпадение не найдено · будет создан новый пациент";
+  const bmi = calculateImportBmi(height, weight);
+  const node = modal(`
+    <form class="import-review-form">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Импорт документа</p>
+          <h2>${escapeHtml(file.name)}</h2>
+        </div>
+        <div class="import-header-actions">
+          <button class="ghost-button import-original-button" type="button" data-open-original ${window.pdfjsLib ? "" : "disabled"}>Оригинал</button>
+          <span class="badge">${extraction.method === "ocr" ? "OCR" : "PDF text"}</span>
+          <span class="badge">${patientBadge}</span>
+        </div>
+        <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
+      </div>
+      <div class="dialog-body import-review-body">
+        ${
+          warnings.length
+            ? `<section class="import-section import-warnings"><h3>Проверьте внимательно</h3><ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`
+            : ""
+        }
+        <div class="import-review-workspace">
+          <main class="import-data-panel">
+            <textarea id="importNote" name="note" hidden>${escapeHtml(note)}</textarea>
+            <textarea id="importDecision" name="decision" hidden>${escapeHtml(decision)}</textarea>
+            <section class="import-patient-panel">
+              <div>
+                <input class="import-patient-name" id="importFullName" name="fullName" aria-label="ФИО" value="${escapeHtml(patientName)}" required />
+                <div class="import-patient-meta">
+                  <input id="importBirthDate" name="birthDate" type="date" aria-label="Дата рождения" value="${escapeHtml(birthDate)}" required />
+                </div>
+                <p class="import-match-notice">${escapeHtml(matchNotice)}</p>
+                <details class="import-evidence">
+                  <summary>Источник</summary>
+                  <p>${importFieldSource(draft.patient.fullName, { kind: "identity-name" })}</p>
+                  <p>${importFieldSource(draft.patient.birthDate, { kind: "identity-date" })}</p>
+                  <p>${importFieldSource(draft.document.date)}</p>
+                </details>
+                <span class="error" data-error="fullName"></span>
+                <span class="error" data-error="birthDate"></span>
+              </div>
+              ${
+                exact.length === 1
+                  ? `<div class="import-patient-match-control">
+                      <label class="import-choice"><input type="radio" name="patientMode" value="existing" data-import-existing-patient="${exact[0].id}" /> <span>Использовать найденного пациента</span></label>
+                      <label class="import-choice"><input type="radio" name="patientMode" value="create" ${createChecked} /> <span>Создать нового</span></label>
+                    </div>`
+                  : `<input type="hidden" name="patientMode" value="create" />`
+              }
+            </section>
+            ${importReviewSection("Обращение", `
+              <div class="import-encounter-strip">
+                <label><input id="importVisitDate" name="visitDate" type="date" aria-label="Дата обращения" value="${escapeHtml(date)}" required /></label>
+                <span class="import-summary-dot">·</span>
+                <label><select id="importFormat" name="format" aria-label="Формат">
+                  <option value="clinic">В клинике</option>
+                  <option value="online">Онлайн</option>
+                  <option value="phone">Телефон / сообщение</option>
+                </select></label>
+                ${height ? `<span class="import-summary-dot">·</span><label><input id="importHeight" name="heightCm" type="number" min="0" step="1" value="${escapeHtml(height)}" /><em>см</em></label>` : `<input id="importHeight" name="heightCm" type="hidden" value="" />`}
+                ${weight ? `<span class="import-summary-dot">·</span><label><input id="importWeight" name="currentWeightKg" type="number" min="0" step="0.1" value="${escapeHtml(weight)}" /><em>кг</em></label>` : `<input id="importWeight" name="currentWeightKg" type="hidden" value="" />`}
+                ${bmi ? `<span class="import-summary-dot">·</span><label class="import-bmi-summary"><span>ИМТ</span><output data-import-bmi>${escapeHtml(bmi)}</output></label>` : `<output data-import-bmi hidden>—</output>`}
+                <input id="importWeightDate" name="weightMeasuredAt" type="hidden" value="${escapeHtml(date)}" />
+              </div>
+              <label class="import-choice import-metrics-choice" data-existing-metrics-option ${exact.length ? "" : "hidden"}>
+                <input type="checkbox" name="updateExistingMetrics" ${height || weight ? "checked" : ""} />
+                <span>Добавить найденные параметры в карточку существующего пациента</span>
+              </label>
+              <span class="error" data-error="visitDate"></span>
+            `)}
+            ${displayedClinical.map(([label, value]) => importReviewSection(label, `
+              <textarea class="auto-grow document-editable" data-import-note-section="${escapeHtml(label)}">${escapeHtml(value)}</textarea>
+            `)).join("") || importReviewSection("Анамнез", `
+              <textarea class="auto-grow document-editable" data-import-note-section="Клиническая запись"></textarea>
+            `)}
+            ${importReviewSection(`Обследования (${draft.investigations?.length || 0})`, `
+              ${
+                draft.investigations?.length
+                  ? `<div class="investigation-list import-main-investigations">${draft.investigations.map((item) => `
+                    <label>
+                      <input data-investigation-name value="${escapeHtml(item.name)}" aria-label="Название обследования" />
+                      <textarea class="auto-grow document-editable compact-auto-grow" rows="1" data-investigation-result aria-label="Результат обследования">${escapeHtml(formatInvestigationDraft(item))}</textarea>
+                    </label>
+                  `).join("")}</div>`
+                  : `<p class="eyebrow">Структурированные обследования не найдены</p>`
+              }
+            `)}
+            ${importReviewSection("Диагноз", `
+              <div class="import-diagnosis-line">
+                <div class="import-icd-row">
+                  <span class="import-icd-chip">
+                    <input data-import-decision-field="icd" value="${escapeHtml(icdCode)}" aria-label="МКБ" placeholder="МКБ" />
+                    ${icdLabel ? `<span class="import-icd-label">${escapeHtml(icdLabel)}</span>` : ""}
+                  </span>
+                </div>
+                <label class="import-clinical-diagnosis">
+                  <span>Клинический диагноз</span>
+                  <textarea class="auto-grow document-editable compact-auto-grow" rows="1" data-import-decision-field="diagnosis" aria-label="Диагноз" placeholder="Диагноз">${escapeHtml(diagnosis)}</textarea>
+                </label>
+              </div>
+            `)}
+            ${importReviewSection("Лечение и рекомендации", `
+              <textarea class="auto-grow document-editable import-long-text" data-import-decision-field="treatment" aria-label="Лечение">${escapeHtml(treatment)}</textarea>
+              ${recommendations ? `<textarea class="auto-grow document-editable compact-auto-grow" rows="1" data-import-decision-field="recommendations" aria-label="Рекомендации">${escapeHtml(recommendations)}</textarea>` : ""}
+            `)}
+            ${importReviewSection("Дальше", `
+              <textarea class="auto-grow compact-auto-grow" rows="1" id="importNextStep" name="nextStep">${escapeHtml(nextStep)}</textarea>
+              ${
+                nextTiming
+                  ? `<div class="field">
+                      <label for="importNextTiming">Ориентир</label>
+                      <input id="importNextTiming" name="nextStepTiming" value="${escapeHtml(nextTiming)}" />
+                      ${importFieldSource(draft.clinical.nextVisitTiming)}
+                    </div>`
+                  : `<input id="importNextTiming" name="nextStepTiming" type="hidden" value="" />`
+              }
+            `)}
+            <details class="import-source-text">
+              <summary>Посмотреть исходный текст PDF</summary>
+              <pre>${escapeHtml(extraction.fullText)}</pre>
+            </details>
+          </main>
+        </div>
+        <div class="import-pdf-overlay" data-pdf-overlay hidden>
+          <section class="import-pdf-lightbox" data-pdf-lightbox role="dialog" aria-modal="true" aria-label="Оригинал PDF">
+            <div class="import-pdf-lightbox-head">
+              <div>
+                <p class="eyebrow">Оригинал PDF</p>
+                <h3>${escapeHtml(file.name)}</h3>
+              </div>
+              <button class="icon-button" type="button" data-close-original aria-label="Закрыть оригинал">×</button>
+            </div>
+            <div class="import-pdf-lightbox-body">
+              <div class="import-pdf-thumbnails" data-pdf-thumbnails></div>
+              <div class="import-pdf-viewer">
+                <div class="import-pdf-toolbar">
+                  <button class="icon-button" type="button" data-pdf-prev aria-label="Предыдущая страница">‹</button>
+                  <span><strong data-pdf-current>1</strong> / <span data-pdf-total>${escapeHtml(String(extraction.pageCount || 1))}</span></span>
+                  <button class="icon-button" type="button" data-pdf-next aria-label="Следующая страница">›</button>
+                  <span class="import-pdf-divider"></span>
+                  <button class="icon-button" type="button" data-pdf-zoom-out aria-label="Уменьшить">−</button>
+                  <span data-pdf-zoom>100%</span>
+                  <button class="icon-button" type="button" data-pdf-zoom-in aria-label="Увеличить">+</button>
+                </div>
+                <div class="import-pdf-page-wrap">
+                  <canvas data-pdf-canvas aria-label="PDF preview"></canvas>
+                  <p class="hint" data-pdf-message>Готовим предпросмотр PDF...</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <p class="form-message" data-import-message></p>
+      </div>
+      <div class="dialog-actions">
+        <p class="import-completeness">Все обязательные данные заполнены</p>
+        <button class="ghost-button" type="button" data-close>Отмена</button>
+        <button class="button" type="submit">Подтвердить импорт</button>
+      </div>
+    </form>
+  `, "import-dialog");
+  bindImportReviewForm(node, file);
+  bindImportPdfPreview(node, file, extraction.pageCount || 1);
+  bindImportOriginalOverlay(node);
+}
+
+async function bindImportPdfPreview(node, file, pageCount) {
+  const canvas = node.querySelector("[data-pdf-canvas]");
+  const thumbnails = node.querySelector("[data-pdf-thumbnails]");
+  const message = node.querySelector("[data-pdf-message]");
+  const currentLabel = node.querySelector("[data-pdf-current]");
+  const totalLabel = node.querySelector("[data-pdf-total]");
+  const zoomLabel = node.querySelector("[data-pdf-zoom]");
+  const prevButton = node.querySelector("[data-pdf-prev]");
+  const nextButton = node.querySelector("[data-pdf-next]");
+  const zoomOutButton = node.querySelector("[data-pdf-zoom-out]");
+  const zoomInButton = node.querySelector("[data-pdf-zoom-in]");
+  if (!canvas || !window.pdfjsLib) {
+    if (message) message.textContent = "Предпросмотр PDF недоступен.";
+    return;
+  }
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  let pdf;
+  let currentPage = 1;
+  let zoom = 1;
+  const context = canvas.getContext("2d", { alpha: false });
+  const renderPage = async () => {
+    if (!pdf || !context) return;
+    if (message) message.textContent = "";
+    const page = await pdf.getPage(currentPage);
+    const viewport = page.getViewport({ scale: zoom });
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    canvas.style.width = `${Math.ceil(viewport.width)}px`;
+    canvas.style.maxWidth = "none";
+    await page.render({ canvasContext: context, viewport }).promise;
+    if (currentLabel) currentLabel.textContent = String(currentPage);
+    if (totalLabel) totalLabel.textContent = String(pdf.numPages);
+    if (zoomLabel) zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    prevButton.disabled = currentPage <= 1;
+    nextButton.disabled = currentPage >= pdf.numPages;
+    thumbnails?.querySelectorAll("[data-pdf-thumb]").forEach((button) => {
+      button.classList.toggle("active", Number(button.dataset.pdfThumb) === currentPage);
+    });
+  };
+  const renderThumbnail = async (pageNumber) => {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 0.18 });
+    const thumbCanvas = document.createElement("canvas");
+    const thumbContext = thumbCanvas.getContext("2d", { alpha: false });
+    thumbCanvas.width = Math.ceil(viewport.width);
+    thumbCanvas.height = Math.ceil(viewport.height);
+    await page.render({ canvasContext: thumbContext, viewport }).promise;
+    const button = document.createElement("button");
+    button.className = "import-pdf-thumb";
+    button.type = "button";
+    button.dataset.pdfThumb = String(pageNumber);
+    button.append(thumbCanvas);
+    button.insertAdjacentHTML("beforeend", `<span>${pageNumber}</span>`);
+    button.addEventListener("click", async () => {
+      currentPage = pageNumber;
+      await renderPage();
+    });
+    thumbnails?.append(button);
+  };
+  try {
+    const data = await file.arrayBuffer();
+    pdf = await window.pdfjsLib.getDocument({ data }).promise;
+    if (totalLabel) totalLabel.textContent = String(pdf.numPages || pageCount);
+    if (thumbnails) {
+      thumbnails.innerHTML = "";
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        await renderThumbnail(pageNumber);
+      }
+    }
+    prevButton?.addEventListener("click", async () => {
+      currentPage = Math.max(1, currentPage - 1);
+      await renderPage();
+    });
+    nextButton?.addEventListener("click", async () => {
+      currentPage = Math.min(pdf.numPages, currentPage + 1);
+      await renderPage();
+    });
+    zoomOutButton?.addEventListener("click", async () => {
+      zoom = Math.max(0.75, zoom - 0.15);
+      await renderPage();
+    });
+    zoomInButton?.addEventListener("click", async () => {
+      zoom = Math.min(1.6, zoom + 0.15);
+      await renderPage();
+    });
+    await renderPage();
+  } catch (error) {
+    if (message) message.textContent = "Не удалось показать предпросмотр PDF.";
+  }
+}
+
+function bindImportOriginalOverlay(node) {
+  const openButton = node.querySelector("[data-open-original]");
+  const overlay = node.querySelector("[data-pdf-overlay]");
+  const lightbox = node.querySelector("[data-pdf-lightbox]");
+  const closeButton = node.querySelector("[data-close-original]");
+  if (!openButton || !overlay || !lightbox) return;
+  let returnFocusTo = null;
+  const close = () => {
+    overlay.hidden = true;
+    node.classList.remove("import-original-open");
+    const focusTarget = returnFocusTo?.isConnected ? returnFocusTo : openButton;
+    focusTarget?.focus();
+  };
+  const open = () => {
+    returnFocusTo = document.activeElement;
+    overlay.hidden = false;
+    node.classList.add("import-original-open");
+    closeButton?.focus();
+  };
+  openButton.addEventListener("click", open);
+  closeButton?.addEventListener("click", close);
+  overlay.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-pdf-lightbox]")) close();
+  });
+  lightbox.addEventListener("click", (event) => event.stopPropagation());
+  node.addEventListener("keydown", (event) => {
+    if (!overlay.hidden && event.key === "Escape") {
+      event.preventDefault();
+      close();
+    }
+  });
+}
+
+async function confirmDocumentImport(form, file) {
+  const formData = new FormData(form);
+  const patientMode = String(formData.get("patientMode") || "");
+  const existingRadio = form.querySelector("[data-import-existing-patient]:checked");
+  const patientInput = {
+    fullName: String(formData.get("fullName") || "").trim(),
+    birthDate: String(formData.get("birthDate") || ""),
+    sex: "",
+    phone: "",
+    email: "",
+    heightCm: String(formData.get("heightCm") || "").trim(),
+    currentWeightKg: String(formData.get("currentWeightKg") || "").trim(),
+    weightMeasuredAt: String(formData.get("weightMeasuredAt") || "").trim(),
+    medicalContext: { allergies: "", conditions: "", therapy: "", notes: "" },
+    about: ""
+  };
+  const visitInput = {
+    date: String(formData.get("visitDate") || ""),
+    format: String(formData.get("format") || "clinic"),
+    status: "completed",
+    note: String(formData.get("note") || "").trim(),
+    decision: String(formData.get("decision") || "").trim(),
+    nextStep: String(formData.get("nextStep") || "").trim(),
+    nextStepTiming: String(formData.get("nextStepTiming") || "").trim()
+  };
+  if (!patientInput.fullName) throw new Error("Введите ФИО пациента.");
+  if (!patientInput.birthDate) throw new Error("Укажите дату рождения.");
+  if (!visitInput.date) throw new Error("Укажите дату обращения.");
+  if (!visitInput.note && !visitInput.decision && !visitInput.nextStep) throw new Error("Добавьте содержимое обращения.");
+  const attachment = {
+    kind: "pdf",
+    name: file.name,
+    mime: file.type || "application/pdf",
+    file,
+    size: file.size
+  };
+  let patient;
+  if (patientMode === "existing") {
+    const patientId = existingRadio?.dataset.importExistingPatient;
+    patient = state.patients.find((item) => item.id === patientId);
+    if (!patient) throw new Error("Выберите найденного пациента или создание нового.");
+    if (formData.get("updateExistingMetrics") && (patientInput.heightCm || patientInput.currentWeightKg)) {
+      patient = await repository.updatePatient(patient.id, {
+        ...normalizePatient(patient),
+        heightCm: patientInput.heightCm || normalizePatient(patient).heightCm || "",
+        currentWeightKg: patientInput.currentWeightKg,
+        weightMeasuredAt: patientInput.weightMeasuredAt || visitInput.date
+      });
+    }
+  } else {
+    patient = await repository.createPatient(patientInput);
+  }
+  try {
+    const visit = await repository.createVisit(patient.id, visitInput, [attachment]);
+    return { patient, visit };
+  } catch (error) {
+    if (patientMode === "create") {
+      throw new Error("Пациент создан, но обращение или PDF не удалось сохранить. Откройте карточку пациента и повторите добавление документа вручную.");
+    }
+    throw error;
+  }
+}
+
+function bindImportReviewForm(node, file) {
+  const form = node.querySelector("form");
+  const message = node.querySelector("[data-import-message]");
+  const resizeTextarea = (textarea) => {
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight + 2}px`;
+  };
+  const syncDocumentFields = () => {
+    const noteInput = form.querySelector("#importNote");
+    const decisionInput = form.querySelector("#importDecision");
+    if (noteInput) {
+      const clinicalParts = Array.from(form.querySelectorAll("[data-import-note-section]"))
+        .map((field) => [field.dataset.importNoteSection, field.value.trim()])
+        .filter(([, value]) => value)
+        .map(([label, value]) => `${label}:\n${value}`);
+      const investigationParts = Array.from(form.querySelectorAll(".import-main-investigations label"))
+        .map((row) => {
+          const name = row.querySelector("[data-investigation-name]")?.value.trim();
+          const result = row.querySelector("[data-investigation-result]")?.value.trim();
+          return name && result ? `- ${name}: ${result}` : "";
+        })
+        .filter(Boolean);
+      const investigations = investigationParts.length ? `Обследования:\n${investigationParts.join("\n")}` : "";
+      noteInput.value = [...clinicalParts, investigations].filter(Boolean).join("\n\n");
+    }
+    if (decisionInput) {
+      const icd = form.querySelector('[data-import-decision-field="icd"]')?.value.trim();
+      const diagnosis = form.querySelector('[data-import-decision-field="diagnosis"]')?.value.trim();
+      const treatment = form.querySelector('[data-import-decision-field="treatment"]')?.value.trim();
+      const recommendations = form.querySelector('[data-import-decision-field="recommendations"]')?.value.trim();
+      decisionInput.value = [
+        icd ? `МКБ: ${icd}` : "",
+        diagnosis ? `Диагноз:\n${diagnosis}` : "",
+        treatment ? `Лечение:\n${treatment}` : "",
+        recommendations ? `Рекомендации:\n${recommendations}` : ""
+      ].filter(Boolean).join("\n\n");
+    }
+  };
+  const syncBmi = () => {
+    const bmi = calculateImportBmi(form.querySelector("#importHeight")?.value, form.querySelector("#importWeight")?.value);
+    const output = form.querySelector("[data-import-bmi]");
+    if (output) output.textContent = bmi || "—";
+  };
+  form.querySelectorAll("textarea.auto-grow").forEach((textarea) => {
+    resizeTextarea(textarea);
+    requestAnimationFrame(() => resizeTextarea(textarea));
+    textarea.addEventListener("input", () => {
+      resizeTextarea(textarea);
+      syncDocumentFields();
+    });
+  });
+  form.querySelectorAll("[data-investigation-name], [data-import-decision-field], #importHeight, #importWeight").forEach((field) => {
+    field.addEventListener("input", () => {
+      syncDocumentFields();
+      syncBmi();
+    });
+  });
+  syncDocumentFields();
+  syncBmi();
+  const metricsOption = form.querySelector("[data-existing-metrics-option]");
+  const syncMetricsOption = () => {
+    if (!metricsOption) return;
+    const selectedExisting = Boolean(form.querySelector("[data-import-existing-patient]:checked"));
+    metricsOption.hidden = !selectedExisting;
+  };
+  form.querySelectorAll('input[name="patientMode"]').forEach((radio) => {
+    radio.addEventListener("change", syncMetricsOption);
+  });
+  syncMetricsOption();
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    syncDocumentFields();
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit?.disabled) return;
+    if (message) message.textContent = "";
+    if (submit) submit.disabled = true;
+    try {
+      const { patient } = await confirmDocumentImport(form, file);
+      node.remove();
+      showToast("Документ импортирован");
+      await route(`#/patient/${patient.id}`);
+    } catch (error) {
+      if (submit) submit.disabled = false;
+      if (message) message.textContent = error instanceof RepositoryError ? repositoryMessage(error, "Не удалось импортировать документ") : error.message;
+    }
+  });
+}
+
+function openDocumentImport() {
+  const node = modal(`
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">PDF → черновик</p>
+        <h2>Импорт документа</h2>
+      </div>
+      <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
+    </div>
+    <div class="dialog-body import-start-body">
+      <div class="dropzone import-dropzone">
+        <label class="button">
+          Выбрать PDF
+          <input class="visually-hidden" type="file" accept="application/pdf" data-import-file />
+        </label>
+        <span class="hint">PDF до 25 МБ. Сначала извлекаем text layer локально, OCR запускается только для сканов.</span>
+      </div>
+      <div class="import-progress" data-import-progress hidden>
+        <div>
+          <strong data-import-progress-label>Готовим документ...</strong>
+          <span data-import-progress-page></span>
+        </div>
+        <progress max="100" value="0" data-import-progress-value></progress>
+      </div>
+      <p class="form-message" data-import-message></p>
+    </div>
+  `, "import-dialog import-start-dialog");
+  const input = node.querySelector("[data-import-file]");
+  const message = node.querySelector("[data-import-message]");
+  const progressBox = node.querySelector("[data-import-progress]");
+  const progressLabel = node.querySelector("[data-import-progress-label]");
+  const progressPage = node.querySelector("[data-import-progress-page]");
+  const progressValue = node.querySelector("[data-import-progress-value]");
+  input.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      if (message) message.textContent = "Выберите PDF-документ.";
+      return;
+    }
+    if (file.size > DOCUMENT_IMPORT_MAX_BYTES) {
+      if (message) message.textContent = "PDF больше 25 МБ. Выберите документ меньшего размера.";
+      return;
+    }
+    if (message) message.textContent = "";
+    input.disabled = true;
+    progressBox.hidden = false;
+    try {
+      const result = await window.MedNoteDocumentImport.analyzePdfFile(file, (progress) => {
+        progressLabel.textContent = progress.label || "Обрабатываем документ";
+        progressPage.textContent = progress.pageNumber ? `Страница ${progress.pageNumber} из ${progress.pageCount}` : "";
+        progressValue.value = Math.max(0, Math.min(100, progress.percent || 0));
+      });
+      node.remove();
+      renderImportReview({ file, ...result });
+    } catch (error) {
+      input.disabled = false;
+      progressBox.hidden = true;
+      if (message) message.textContent = error.message.includes("надёжно") ? "Не удалось надёжно распознать документ. Можно попробовать другой PDF или внести данные вручную." : error.message;
+    }
   });
 }
 
@@ -1870,6 +2515,9 @@ async function route(targetHash = location.hash || "#/") {
 
 function bindActions() {
   bindPatientFormButtons(document);
+  document.querySelectorAll("[data-open-document-import]").forEach((button) => {
+    button.addEventListener("click", openDocumentImport);
+  });
   document.querySelectorAll("[data-start-encounter]").forEach((button) => {
     button.addEventListener("click", async () => {
       if (button.disabled) return;

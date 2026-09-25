@@ -1,0 +1,18 @@
+{
+  "name": "14_ambiguous_identity",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "ambiguous identity" }],
+    "fullText": "Иванова Мария Сергеевна 07.11.1988 (37 лет) Медкарта №N-1\nПетрова Мария Сергеевна 07.11.1988 (37 лет) Медкарта №N-2\nПРОТОКОЛ от 14.10.2026\nПо данным обследования:\nТТГ: 2,0\nДиагноз по МКБ: E03.9\nЛечение: контроль."
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": null,
+      "patient.fullName.confidence": "low"
+    },
+    "warningsContain": ["Найдены два возможных ФИО пациента"],
+    "diagnostics": [
+      { "field": "patient.fullName", "rule": "identity_candidate_scoring", "confidence": "low" }
+    ]
+  }
+}

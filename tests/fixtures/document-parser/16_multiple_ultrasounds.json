@@ -1,0 +1,15 @@
+{
+  "name": "16_multiple_ultrasounds",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "multiple ultrasounds" }],
+    "fullText": "Пациент: Федорова Нина Аркадьевна\nДата рождения: 15.04.1970\nМедкарта №P-1600\nПРОТОКОЛ от 18.09.2026\nПо данным обследования:\nУЗИ щитовидной железы: общий объем 12 см3, узлов нет\nУЗИ ОБП: без особенностей\nУЗИ почек: микролиты справа\nДиагноз по МКБ: E04.0\nКлинический диагноз: Нетоксический зоб\nЛечение: наблюдение.\nСледующий визит: через год"
+  },
+  "expected": {
+    "investigations": [
+      { "type": "ultrasound_thyroid", "value": null },
+      { "type": "ultrasound_abdomen_kidney", "index": 0, "value": null },
+      { "type": "ultrasound_abdomen_kidney", "index": 1, "value": null }
+    ]
+  }
+}

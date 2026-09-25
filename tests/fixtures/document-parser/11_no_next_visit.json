@@ -1,0 +1,20 @@
+{
+  "name": "11_no_next_visit",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "no next visit" }],
+    "fullText": "ФИО: Егорова Светлана Павловна\nДата рождения: 03.03.1977\nМедкарта №K-1100\nПРОТОКОЛ от 16.09.2026\nПо данным обследования:\nПролактин: 18,4\nДиагноз по МКБ: E22.1\nКлинический диагноз: Гиперпролактинемия\nЛечение: Контроль пролактина.\nС планом лечения ознакомлен(а): Егорова С.П.\nВрач: Романова Т.Т."
+  },
+  "expected": {
+    "fields": {
+      "clinical.nextStep.value": null,
+      "clinical.icdCode.value": "E22.1"
+    },
+    "investigations": [
+      { "type": "prolactin", "value": "18.4" }
+    ]
+  },
+  "mustNot": [
+    { "path": "clinical.nextStep.value", "contain": "Врач" }
+  ]
+}

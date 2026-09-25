@@ -1,0 +1,22 @@
+{
+  "name": "02_clinic_header_before_patient",
+  "input": {
+    "method": "text",
+    "pages": [{ "pageNumber": 1, "text": "clinic header before patient" }],
+    "fullText": "ООО Мед Лайн Ульяновск\nг. Ульяновск, ул. Гончарова, 10\nТел: 8 800 000 00 00 email: clinic@example.test\nСидорова Мария Сергеевна 07.11.1988 (37 лет) Медкарта №B-200\nПРОТОКОЛ от 14.10.2026\nПо данным обследования: ТТГ 6,80\nОбъективный статус рост: 168 см; масса тела: 72 кг; индекс массы тела 25,5\nДиагноз по МКБ: E03.9\nКлинический диагноз: Гипотиреоз\nЛечение: Коррекция терапии.\nСледующий визит: после обследования"
+  },
+  "expected": {
+    "fields": {
+      "patient.fullName.value": "Сидорова Мария Сергеевна",
+      "patient.birthDate.value": "1988-11-07",
+      "document.date.value": "2026-10-14"
+    },
+    "investigations": [
+      { "type": "tsh", "value": "6.80" }
+    ]
+  },
+  "mustNot": [
+    { "path": "patient.fullName.value", "equal": "Лайн Ульяновск Гончарова" },
+    { "path": "patient.fullName.value", "contain": "Ульяновск" }
+  ]
+}

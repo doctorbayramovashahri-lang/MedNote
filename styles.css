@@ -216,6 +216,13 @@ a {
   margin-bottom: var(--s4);
 }
 
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  justify-content: flex-end;
+}
+
 .eyebrow {
   margin: 0;
   color: var(--text-secondary);
@@ -934,6 +941,10 @@ textarea {
   animation: backdrop-in var(--motion-normal) var(--ease-standard);
 }
 
+.modal:has(.import-dialog) {
+  padding: 0;
+}
+
 .modal.open {
   display: flex;
 }
@@ -952,6 +963,69 @@ textarea {
 .patient-dialog {
   width: min(94vw, 1420px);
   max-height: calc(100vh - 32px);
+}
+
+.import-dialog {
+  width: min(98vw, 1720px);
+  height: 100vh;
+  max-height: none;
+  overflow: hidden;
+  font-size: 0.9rem;
+}
+
+.import-dialog .import-review-form {
+  height: 100%;
+  gap: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.import-dialog .dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  min-height: 40px;
+  padding: 0.28rem 0.72rem;
+  background: color-mix(in srgb, var(--surface), white 4%);
+}
+
+.import-dialog .dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 40px;
+  padding: 0.28rem 0.72rem;
+  background: color-mix(in srgb, var(--surface), white 4%);
+}
+
+.import-dialog .dialog-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.import-dialog .dialog-head h2 {
+  font-size: 1rem;
+}
+
+.import-dialog .dialog-head .eyebrow {
+  font-size: 0.72rem;
+}
+
+.import-dialog .badge {
+  min-height: 28px;
+  padding: 0.24rem 0.55rem;
+  font-size: 0.76rem;
+}
+
+.import-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.import-start-dialog {
+  width: min(620px, 100%);
 }
 
 .dialog-head,
@@ -986,6 +1060,1107 @@ textarea {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface-secondary);
+}
+
+.import-start-body,
+.import-review-body,
+.import-review-form {
+  display: grid;
+  gap: var(--s4);
+}
+
+.import-review-body,
+.import-review-form {
+  gap: var(--s3);
+}
+
+.import-review-body {
+  min-height: 0;
+  padding: 0;
+  background: #eef4f2;
+}
+
+.import-dropzone {
+  min-height: 180px;
+  place-items: center;
+  text-align: center;
+}
+
+.import-progress {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-secondary);
+}
+
+.import-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.import-progress strong {
+  color: var(--text-primary);
+}
+
+.import-progress progress {
+  width: 100%;
+  height: 10px;
+  accent-color: var(--accent);
+}
+
+.import-section {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.import-review-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s4);
+  align-items: start;
+  padding: var(--s3) 0 var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-summary-main {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.import-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.import-patient-name,
+.import-summary-row input,
+.import-summary-row select,
+.document-editable,
+.import-diagnosis-line input,
+.import-main-investigations input,
+.import-parameter-list input {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.import-patient-name {
+  width: min(100%, 840px);
+  min-height: 34px;
+  padding: 0.08rem 0.16rem;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.import-summary-row input,
+.import-summary-row select {
+  width: auto;
+  min-height: 32px;
+  padding: 0.2rem 0.35rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.import-patient-name:hover,
+.import-summary-row input:hover,
+.import-summary-row select:hover,
+.document-editable:hover,
+.import-diagnosis-line input:hover,
+.import-main-investigations input:hover,
+.import-parameter-list input:hover {
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+
+.import-patient-name:focus,
+.import-summary-row input:focus,
+.import-summary-row select:focus,
+.document-editable:focus,
+.import-diagnosis-line input:focus,
+.import-main-investigations input:focus,
+.import-parameter-list input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 84%);
+}
+
+.import-summary-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.import-match-notice {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.import-evidence {
+  width: fit-content;
+  margin-top: 0.15rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.import-evidence summary {
+  cursor: pointer;
+}
+
+.import-evidence p {
+  margin: 0.2rem 0 0;
+}
+
+.import-evidence .hint {
+  display: inline;
+}
+
+.compact-source .import-source {
+  max-width: 34rem;
+  color: var(--text-muted);
+}
+
+.import-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 0.32fr);
+  gap: var(--s5);
+  align-items: start;
+}
+
+.import-review-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+.import-original-button {
+  min-height: 30px;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent), white 90%);
+  color: var(--accent);
+  font-weight: 760;
+}
+
+.import-pdf-overlay[hidden] {
+  display: none;
+}
+
+.import-pdf-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: clamp(0.75rem, 3vw, 2rem);
+  background: rgba(14, 28, 25, 0.48);
+}
+
+.import-pdf-lightbox {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(90vw, 1480px);
+  height: min(90vh, 980px);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--border) 68%);
+  border-radius: var(--radius-lg);
+  background: #edf3f1;
+  box-shadow: 0 28px 80px rgba(8, 24, 21, 0.34);
+}
+
+.import-pdf-lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.import-pdf-lightbox-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.import-pdf-lightbox-body {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: #edf4f2;
+}
+
+.import-pdf-thumbnails {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  padding: var(--s2);
+  overflow: auto;
+  border-right: 1px solid var(--border);
+}
+
+.import-pdf-thumb {
+  display: grid;
+  gap: var(--s1);
+  justify-items: center;
+  padding: var(--s1);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.import-pdf-thumb canvas {
+  width: 70px;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: white;
+  box-shadow: 0 8px 18px rgba(16, 31, 28, 0.08);
+}
+
+.import-pdf-thumb.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), white 92%);
+  color: var(--accent);
+}
+
+.import-pdf-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.import-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  min-height: 42px;
+  padding: var(--s1) var(--s2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.import-pdf-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+.import-pdf-page-wrap {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--s3);
+}
+
+.import-pdf-page-wrap canvas {
+  width: min(100%, 720px);
+  height: auto;
+  background: white;
+  box-shadow: 0 12px 30px rgba(16, 31, 28, 0.12);
+}
+
+.import-data-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.42rem;
+  justify-self: center;
+  width: min(100%, 1260px);
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  padding: 0.55rem;
+  background: linear-gradient(180deg, #f9fcfb 0%, #ffffff 44%);
+}
+
+.import-patient-panel,
+.import-data-section {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+  padding: 0.52rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface), #f5fbf9 28%);
+}
+
+.import-patient-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(210px, auto);
+  gap: 0.65rem;
+  align-items: start;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent), white 92%), var(--surface));
+}
+
+.import-patient-meta,
+.import-encounter-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  align-items: center;
+}
+
+.import-patient-meta input {
+  width: 138px;
+  min-height: 28px;
+  padding: 0.12rem 0.28rem;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.84rem;
+}
+
+.import-patient-meta span {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.import-patient-match-control {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s1);
+}
+
+.import-data-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.import-data-section-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.96rem;
+  font-weight: 760;
+}
+
+.import-data-panel,
+.import-data-panel input,
+.import-data-panel textarea,
+.import-data-panel select,
+.import-data-panel button {
+  font-size: 0.88rem;
+}
+
+.import-data-panel .import-patient-name {
+  font-size: 1.5rem;
+}
+
+.import-encounter-strip label {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: var(--s1);
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.import-encounter-strip label > span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.import-encounter-strip input,
+.import-encounter-strip select {
+  width: auto;
+  min-height: 28px;
+  padding: 0.12rem 0.28rem;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+.import-encounter-strip input[type="number"] {
+  width: 58px;
+}
+
+.import-encounter-strip em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.import-encounter-strip output {
+  font-weight: 720;
+}
+
+.import-clinical-column,
+.import-side-column {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.import-clinical-column {
+  gap: var(--s5);
+}
+
+.import-clinical-section,
+.import-side-section {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.import-clinical-section {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-clinical-section:last-child {
+  border-bottom: 0;
+}
+
+.import-document-section {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-data-panel .document-editable {
+  min-height: 24px;
+  padding: 0.08rem 0;
+  border-radius: 6px;
+}
+
+.import-document-section > h3,
+.import-clinical-section > label,
+.import-side-section > h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 760;
+}
+
+.import-document-block {
+  display: grid;
+  gap: var(--s1);
+}
+
+.import-document-block label {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+.import-clinical-section textarea,
+.document-editable {
+  width: 100%;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.34;
+}
+
+.document-editable {
+  min-height: 26px;
+  padding: 0.2rem 0.32rem;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+}
+
+.import-long-text {
+  min-height: 72px;
+}
+
+.import-clinical-section .hint,
+.import-source {
+  font-size: 0.78rem;
+}
+
+.import-main-investigations {
+  border-radius: 0;
+}
+
+.import-main-investigations label {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.34fr) minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.04rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.import-main-investigations label:last-child {
+  border-bottom: 0;
+}
+
+.import-main-investigations input {
+  min-height: 18px;
+  padding: 0.01rem 0.18rem;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.12;
+  font-weight: 720;
+}
+
+.import-main-investigations textarea {
+  min-height: 18px;
+  padding-top: 0.01rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.12;
+}
+
+.import-diagnosis-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: center;
+}
+
+.import-icd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(420px, 100%);
+  min-height: 26px;
+  padding: 0.12rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--accent), white 56%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent), white 91%);
+  color: var(--accent);
+}
+
+.import-icd-chip:focus-within {
+  border-color: var(--accent);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 86%);
+}
+
+.import-diagnosis-line .import-icd-chip input:hover,
+.import-diagnosis-line .import-icd-chip input:focus {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.import-diagnosis-line input {
+  width: 3.3rem;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.86rem;
+  font-weight: 720;
+}
+
+.import-icd-label {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.import-next-section {
+  display: grid;
+  grid-template-columns: minmax(0, 0.6fr) minmax(180px, 0.35fr);
+  gap: var(--s3);
+  align-items: start;
+}
+
+.compact-auto-grow {
+  min-height: 28px;
+}
+
+.import-next-section textarea {
+  min-height: 32px;
+  padding: 0.2rem 0.32rem;
+}
+
+.import-data-section:has(#importNextStep) {
+  gap: 0.18rem;
+  padding-block: 0.36rem;
+}
+
+.import-data-section:has(#importNextStep) .import-data-section-head h3 {
+  font-size: 0.9rem;
+}
+
+.import-data-section #importNextStep {
+  min-height: 24px;
+  padding: 0.08rem 0.24rem;
+}
+
+.import-side-section {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-side-section:last-child {
+  border-bottom: 0;
+}
+
+.import-parameter-list {
+  display: grid;
+  gap: var(--s1);
+}
+
+.import-parameter-list label {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: var(--s2);
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.import-parameter-list input {
+  width: 100%;
+  min-height: 30px;
+  padding: 0.25rem 0.4rem;
+}
+
+.import-parameter-list output {
+  min-height: 30px;
+  padding: 0.25rem 0.4rem;
+  color: var(--text-primary);
+  font-weight: 680;
+}
+
+.import-parameter-list em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.import-section .section-head {
+  padding: 0 0 var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+.import-match-panel {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s1);
+}
+
+.import-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.import-choice input {
+  width: auto;
+  min-height: auto;
+  margin-top: 0.2rem;
+}
+
+.import-metrics-choice {
+  align-self: end;
+}
+
+.import-source {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-warnings {
+  border-color: color-mix(in srgb, var(--danger), transparent 58%);
+  background: color-mix(in srgb, var(--danger), white 94%);
+}
+
+.import-warnings ul {
+  margin: 0;
+  padding-left: var(--s5);
+  color: var(--text-primary);
+}
+
+.investigation-list {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.investigation-list div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: start;
+  min-height: 0;
+  padding: 0.48rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.investigation-list div:last-child {
+  border-bottom: 0;
+}
+
+.investigation-list span {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.import-inspector-list {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+}
+
+.import-inspector-list div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: baseline;
+  min-height: 30px;
+}
+
+.import-inspector-list dt {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.import-inspector-list dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 680;
+}
+
+.import-review-body textarea {
+  min-height: 30px;
+}
+
+.import-review-body #importDecision,
+.import-review-body #importNote {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.import-source-text {
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+}
+
+.import-source-text summary {
+  cursor: pointer;
+  font-weight: 680;
+}
+
+.import-source-text pre {
+  margin: var(--s2) 0 0;
+  overflow: visible;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.import-completeness {
+  margin: 0 auto 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.import-data-panel {
+  gap: 0;
+  padding: 0.65rem 0.82rem;
+  background: #fbfdfc;
+}
+
+.import-data-panel .import-data-section {
+  gap: 0.38rem;
+  padding: 0.72rem 0.18rem;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 24%);
+  border-radius: 0;
+  background: transparent;
+}
+
+.import-data-panel .import-data-section:hover {
+  background: color-mix(in srgb, var(--accent), white 96%);
+}
+
+.import-data-panel .import-data-section-head h3 {
+  color: color-mix(in srgb, var(--text-primary), var(--accent) 10%);
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.import-data-panel .import-patient-panel {
+  margin-bottom: 0.32rem;
+  padding: 0.82rem 0.88rem;
+  border: 1px solid color-mix(in srgb, var(--accent), white 72%);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent), white 94%), #ffffff);
+}
+
+.import-patient-panel:hover {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent), white 91%), #ffffff);
+}
+
+.import-data-panel .import-patient-name {
+  min-height: 32px;
+  padding: 0;
+  font-size: 1.52rem;
+}
+
+.import-patient-meta input {
+  padding-left: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.import-patient-match-control {
+  align-content: start;
+  color: var(--text-secondary);
+}
+
+.import-encounter-strip {
+  gap: 0.18rem 0.42rem;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.import-encounter-strip label {
+  display: inline-flex;
+  gap: 0.24rem;
+  align-items: baseline;
+  color: var(--text-primary);
+}
+
+.import-encounter-strip input,
+.import-encounter-strip select {
+  min-height: 24px;
+  padding: 0.02rem 0.12rem;
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.import-encounter-strip input[type="date"] {
+  width: 8.5rem;
+}
+
+.import-encounter-strip input[type="number"] {
+  width: 3rem;
+  text-align: right;
+}
+
+.import-summary-dot,
+.import-encounter-strip em,
+.import-bmi-summary span {
+  color: var(--text-muted);
+}
+
+.import-bmi-summary output {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.document-editable,
+.import-main-investigations input,
+.import-main-investigations textarea,
+.import-diagnosis-line input,
+.import-encounter-strip input,
+.import-encounter-strip select,
+.import-patient-name,
+.import-patient-meta input {
+  border: 1px solid transparent;
+  cursor: text;
+}
+
+.import-encounter-strip select {
+  cursor: pointer;
+}
+
+.document-editable:hover,
+.import-main-investigations label:hover input,
+.import-main-investigations label:hover textarea,
+.import-diagnosis-line:hover input,
+.import-encounter-strip label:hover input,
+.import-encounter-strip label:hover select,
+.import-patient-name:hover,
+.import-patient-meta input:hover {
+  border-color: color-mix(in srgb, var(--accent), transparent 72%);
+  background: color-mix(in srgb, var(--accent), white 97%);
+}
+
+.document-editable:focus,
+.import-main-investigations input:focus,
+.import-main-investigations textarea:focus,
+.import-diagnosis-line input:focus,
+.import-encounter-strip input:focus,
+.import-encounter-strip select:focus,
+.import-patient-name:focus,
+.import-patient-meta input:focus {
+  border-color: var(--accent);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 86%);
+}
+
+.import-main-investigations {
+  border-top: 1px solid var(--border);
+}
+
+.import-main-investigations label {
+  grid-template-columns: minmax(190px, 0.36fr) minmax(0, 1fr);
+  padding: 0.18rem 0;
+}
+
+.import-main-investigations input {
+  font-size: 0.86rem;
+}
+
+.import-main-investigations textarea {
+  font-size: 0.86rem;
+  line-height: 1.22;
+}
+
+.import-diagnosis-line {
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+}
+
+.import-icd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.52rem;
+  align-items: center;
+}
+
+.import-icd-chip {
+  min-height: 24px;
+  padding: 0.08rem 0.48rem;
+}
+
+.import-icd-label {
+  color: var(--text-secondary);
+}
+
+.import-clinical-diagnosis {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.import-clinical-diagnosis > span {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.import-long-text {
+  min-height: 0;
+  line-height: 1.4;
+}
+
+.import-data-section #importNextStep {
+  width: auto;
+  min-width: min(100%, 220px);
+  max-width: 100%;
+}
+
+.import-source-text {
+  padding: 0.55rem 0.18rem;
+}
+
+.import-completeness::before {
+  content: "✓";
+  display: inline-grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-right: 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent), white 82%);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.import-pdf-lightbox-body {
+  background: #edf3f1;
+}
+
+.import-pdf-toolbar {
+  min-height: 38px;
+  color: var(--text-muted);
+}
+
+.import-pdf-thumb {
+  opacity: 0.78;
+}
+
+.import-pdf-thumb.active {
+  opacity: 1;
+}
+
+.import-pdf-page-wrap canvas {
+  box-shadow: 0 10px 26px rgba(16, 31, 28, 0.14);
+}
+
+@media (max-width: 900px) {
+  .import-review-workspace,
+  .import-pdf-lightbox-body,
+  .import-review-summary,
+  .import-review-grid,
+  .import-summary-row,
+  .import-next-section,
+  .import-main-investigations label,
+  .import-diagnosis-line,
+  .import-patient-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .import-data-panel {
+    max-height: none;
+  }
+
+  .import-pdf-lightbox-body {
+    max-height: 70vh;
+  }
+
+  .import-summary-row {
+    display: grid;
+  }
+
+  .import-summary-badges {
+    justify-content: flex-start;
+  }
 }
 
 .weight-history-list {
