@@ -540,6 +540,68 @@ textarea {
   animation: content-in var(--motion-normal) var(--ease-standard);
 }
 
+.patient-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.patient-action-menu {
+  position: relative;
+}
+
+.patient-action-menu summary {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: var(--surface);
+  cursor: pointer;
+  list-style: none;
+}
+
+.patient-action-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.patient-action-menu-popover {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  right: 0;
+  z-index: 4;
+  min-width: 190px;
+  padding: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.patient-action-menu:not([open]) .patient-action-menu-popover {
+  display: none;
+}
+
+.danger-menu-button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.66rem 0.72rem;
+  color: #9f1d1d;
+  background: transparent;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.danger-menu-button:hover,
+.danger-menu-button:focus-visible {
+  outline: none;
+  background: #fff1f1;
+}
+
 .patient-identity {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -958,6 +1020,40 @@ textarea {
   background: var(--surface);
   box-shadow: var(--shadow-soft);
   animation: dialog-in var(--motion-slow) var(--ease-standard);
+}
+
+.delete-dialog {
+  width: min(560px, 100%);
+}
+
+.delete-dialog-body {
+  display: grid;
+  gap: var(--s3);
+}
+
+.delete-dialog-body h3,
+.delete-dialog-body p,
+.delete-dialog-body ul {
+  margin: 0;
+}
+
+.delete-dialog-body ul {
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+}
+
+.danger-note {
+  color: #9f1d1d;
+  font-weight: 700;
+}
+
+.danger-button {
+  background: #b42318;
+}
+
+.danger-button:hover,
+.danger-button:focus-visible {
+  background: #971b12;
 }
 
 .patient-dialog {

@@ -663,6 +663,40 @@ const supabaseRepository = (() => {
       }
       return this.getPatient(id);
     },
+    async deletePatient(id) {
+      const session = await requireSupabaseSession();
+      const doctorId = session.user.id;
+      const currentPatient = await this.getPatient(id);
+      if (!currentPatient) throw new RepositoryError(REPOSITORY_ERROR_TYPES.PERMISSION, "Patient is not available for the current doctor.");
+
+      const { data: attachmentRows, error: readAttachmentsError } = await selectAttachmentColumns(from("attachments")).eq("patient_id", id);
+      if (readAttachmentsError) throwRepositoryError(readAttachmentsError, "Unable to read patient attachments.");
+
+      const patientPathPrefix = `${encodeURIComponent(doctorId)}/${encodeURIComponent(id)}/`;
+      const storagePaths = [...new Set((attachmentRows || []).map((row) => row.storage_path).filter(Boolean))];
+      const unsafePath = storagePaths.find((storagePath) => !storagePath.startsWith(patientPathPrefix));
+      if (unsafePath) {
+        throw new RepositoryError(REPOSITORY_ERROR_TYPES.PERMISSION, "Attachment path is outside the patient namespace.");
+      }
+      if (storagePaths.length) {
+        const { error: removeError } = await attachmentBucket().remove(storagePaths);
+        if (removeError) throwRepositoryError(removeError, "Unable to remove patient attachment objects.");
+      }
+
+      const orderedDeletes = [
+        ["attachments", "Unable to remove patient attachment metadata."],
+        ["visits", "Unable to remove patient visits."],
+        ["patient_weights", "Unable to remove patient weight history."]
+      ];
+      for (const [table, message] of orderedDeletes) {
+        const { error } = await from(table).delete().eq("patient_id", id).eq("doctor_id", doctorId);
+        if (error) throwRepositoryError(error, message);
+      }
+      const { data: deletedRows, error } = await from("patients").delete().eq("id", id).eq("doctor_id", doctorId).select("id");
+      if (error) throwRepositoryError(error, "Unable to remove patient.");
+      if (!deletedRows?.length) throw new RepositoryError(REPOSITORY_ERROR_TYPES.PERMISSION, "Patient is not available for the current doctor.");
+      return currentPatient;
+    },
     async getVisits(patientId) {
       await requireSupabaseSession();
       const query = orderVisitsClinically(selectVisitColumns(from("visits")).eq("patient_id", patientId));
@@ -919,6 +953,19 @@ const dbRepository = (() => {
         })
       }));
       return this.getPatient(id);
+    },
+    async deletePatient(id) {
+      let deletedPatient = null;
+      await mutate((state) => {
+        deletedPatient = state.patients.find((patient) => patient.id === id) || null;
+        return {
+          ...state,
+          patients: state.patients.filter((patient) => patient.id !== id),
+          visits: state.visits.filter((visit) => visit.patientId !== id),
+          attachments: state.attachments.filter((attachment) => attachment.patientId !== id)
+        };
+      });
+      return deletedPatient;
     },
     async getVisits(patientId) {
       return (await ensureState()).visits.filter((visit) => visit.patientId === patientId);
@@ -1990,7 +2037,15 @@ function renderPatientPage(patientId) {
           ${renderContactLine(patient)}
         </div>
       </div>
-      <button class="ghost-button" type="button" data-open-patient-form="${patient.id}">Редактировать данные</button>
+      <div class="patient-actions">
+        <button class="ghost-button" type="button" data-open-patient-form="${patient.id}">Редактировать данные</button>
+        <details class="patient-action-menu">
+          <summary aria-label="Действия пациента">…</summary>
+          <div class="patient-action-menu-popover">
+            <button class="danger-menu-button" type="button" data-confirm-delete-patient="${patient.id}">Удалить пациента</button>
+          </div>
+        </details>
+      </div>
     </section>
     <section class="profile-read" aria-label="Профиль пациента">
       ${renderMetricStrip(patient)}
@@ -2159,7 +2214,12 @@ function modal(content, dialogClass = "") {
   node.innerHTML = `<div class="${className}" role="dialog" aria-modal="true">${content}</div>`;
   document.body.append(node);
   node.addEventListener("click", (event) => {
+    if (node.dataset.modalBusy === "true") return;
     if (event.target === node || event.target.matches("[data-close]")) node.remove();
+  });
+  node.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || node.dataset.modalBusy === "true") return;
+    node.remove();
   });
   const first = node.querySelector("input, textarea, select, button");
   if (first) first.focus();
@@ -2186,6 +2246,56 @@ function repositoryMessage(error, fallback = "Операция временно 
     [REPOSITORY_ERROR_TYPES.UNKNOWN]: fallback
   };
   return messages[error.type] || fallback;
+}
+
+function patientDeleteConfirmation(patient) {
+  if (!patient) return;
+  const node = modal(`
+    <div class="dialog-head compact-dialog-head">
+      <div>
+        <p class="eyebrow">Необратимое действие</p>
+        <h2>Удалить пациента?</h2>
+      </div>
+      <button class="icon-button" type="button" aria-label="Закрыть" data-close>×</button>
+    </div>
+    <div class="dialog-body delete-dialog-body">
+      <h3>${escapeHtml(patient.fullName)}</h3>
+      <p>Будут удалены:</p>
+      <ul>
+        <li>карточка пациента;</li>
+        <li>история обращений;</li>
+        <li>данные веса;</li>
+        <li>вложения и связанные файлы.</li>
+      </ul>
+      <p class="danger-note">Это действие нельзя отменить.</p>
+      <p class="form-error" data-delete-error hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="ghost-button" type="button" data-close>Отмена</button>
+      <button class="button danger-button" type="button" data-delete-patient="${patient.id}">Удалить пациента</button>
+    </div>
+  `, "delete-dialog");
+  const deleteButton = node.querySelector("[data-delete-patient]");
+  const errorNode = node.querySelector("[data-delete-error]");
+  deleteButton.addEventListener("click", async () => {
+    if (deleteButton.disabled) return;
+    deleteButton.disabled = true;
+    node.dataset.modalBusy = "true";
+    deleteButton.textContent = "Удаление...";
+    errorNode.hidden = true;
+    try {
+      await repository.deletePatient(patient.id);
+      node.remove();
+      showToast("Пациент удалён");
+      await route("#/");
+    } catch (error) {
+      delete node.dataset.modalBusy;
+      deleteButton.disabled = false;
+      deleteButton.textContent = "Удалить пациента";
+      errorNode.textContent = repositoryMessage(error, "Не удалось удалить пациента. Проверьте связанные файлы и попробуйте ещё раз.");
+      errorNode.hidden = false;
+    }
+  });
 }
 
 function patientForm(patient = null) {
@@ -2533,6 +2643,12 @@ function bindActions() {
   });
   document.querySelectorAll("[data-open-visit-form]").forEach((button) => {
     button.addEventListener("click", () => visitForm(button.dataset.openVisitForm));
+  });
+  document.querySelectorAll("[data-confirm-delete-patient]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const patient = state.patients.find((item) => item.id === button.dataset.confirmDeletePatient);
+      patientDeleteConfirmation(patient);
+    });
   });
   document.querySelectorAll("[data-edit-visit]").forEach((button) => {
     button.addEventListener("click", () => {
