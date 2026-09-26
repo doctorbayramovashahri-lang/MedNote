@@ -91,6 +91,15 @@ function calculateAge(birthDate) {
   return age;
 }
 
+function formatAge(age) {
+  const lastTwo = age % 100;
+  const last = age % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return `${age} лет`;
+  if (last === 1) return `${age} год`;
+  if (last >= 2 && last <= 4) return `${age} года`;
+  return `${age} лет`;
+}
+
 function fileSize(size) {
   if (!size) return "";
   if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} КБ`;
@@ -1411,7 +1420,7 @@ function renderDashboardDraft(visit) {
 }
 
 function renderDashboardRecentPatient({ patient, visit }) {
-  const birth = patient.birthDate ? `${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}` : "дата рождения не указана";
+  const birth = patient.birthDate ? `${formatAge(calculateAge(patient.birthDate))} · ${formatDate(patient.birthDate)}` : "дата рождения не указана";
   const lastVisit = visit ? `${formatShortDate(visit.date)} · ${visitFormatLabel(visit.format)}` : "обращений нет";
   return `
     <a class="dashboard-row dashboard-patient-row" href="#/patient/${patient.id}">
@@ -2562,7 +2571,7 @@ function renderContactLine(patient) {
 function patientIdentityMeta(patient, visit = latestVisit(patient.id)) {
   const parts = [];
   if (patient.birthDate) {
-    parts.push(`${calculateAge(patient.birthDate)} лет`);
+    parts.push(formatAge(calculateAge(patient.birthDate)));
     parts.push(formatDate(patient.birthDate));
   }
   if (patient.phone) parts.push(patient.phone);
@@ -2832,7 +2841,7 @@ function renderEncounterWorkspace(patientId, visitId) {
         <div>
           <p class="eyebrow encounter-back"><a href="#/patient/${patient.id}">← Карточка пациента</a></p>
           <h1>${escapeHtml(patient.fullName)}</h1>
-          <p class="patient-meta">${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)} · ${draftLabel}</p>
+          <p class="patient-meta">${formatAge(calculateAge(patient.birthDate))} · ${formatDate(patient.birthDate)} · ${draftLabel}</p>
         </div>
         <div class="encounter-header-actions">
           <button class="ghost-button" type="button" data-open-template-picker>Применить шаблон</button>
