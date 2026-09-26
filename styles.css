@@ -348,7 +348,7 @@ h3 {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s3);
   align-items: start;
 }
@@ -388,7 +388,7 @@ h3 {
 
 .dashboard-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.8fr) auto;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(220px, 1fr) auto;
   gap: var(--s3);
   align-items: center;
   min-width: 0;
@@ -410,7 +410,7 @@ h3 {
 }
 
 .dashboard-patient-row {
-  grid-template-columns: auto minmax(0, 1fr) minmax(130px, 0.75fr) auto;
+  grid-template-columns: auto minmax(320px, 1fr) minmax(220px, 0.9fr) auto;
 }
 
 .dashboard-row-main {
