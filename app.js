@@ -1151,7 +1151,7 @@ const dbRepository = (() => {
 
 const repository = supabaseRepository;
 
-let state = { patients: [], visits: [], attachments: [], query: "" };
+let state = { patients: [], visits: [], attachments: [], query: "", medicalTemplates: [], templateQuery: "" };
 let authState = { status: "auth-loading", session: null, error: "" };
 
 async function hydrate() {
@@ -1163,7 +1163,7 @@ async function hydrate() {
 }
 
 function resetUiState() {
-  state = { patients: [], visits: [], attachments: [], query: "" };
+  state = { patients: [], visits: [], attachments: [], query: "", medicalTemplates: [], templateQuery: "" };
 }
 
 function setAuthState(nextState) {
@@ -1476,7 +1476,11 @@ function renderHomeDashboard() {
 }
 
 function updateNavigationState() {
-  const section = location.hash.startsWith("#/patients") || location.hash.startsWith("#/patient/") ? "patients" : "home";
+  const section = location.hash.startsWith("#/templates")
+    ? "templates"
+    : location.hash.startsWith("#/patients") || location.hash.startsWith("#/patient/")
+      ? "patients"
+      : "home";
   document.querySelectorAll("[data-nav-section]").forEach((item) => {
     const isActive = item.dataset.navSection === section;
     item.classList.toggle("active", isActive);
@@ -2201,6 +2205,161 @@ function renderPatientCard(patient) {
   `;
 }
 
+async function loadMedicalTemplates() {
+  state.medicalTemplates = await repository.listMedicalTemplates();
+}
+
+function filteredMedicalTemplates() {
+  const query = state.templateQuery.trim().toLowerCase();
+  return state.medicalTemplates
+    .filter((template) => template.title.toLowerCase().includes(query))
+    .sort((a, b) => `${b.updatedAt || ""}`.localeCompare(`${a.updatedAt || ""}`) || a.title.localeCompare(b.title, "ru"));
+}
+
+async function renderTemplatesPage() {
+  app.innerHTML = `
+    <section class="page-head templates-head">
+      <div>
+        <h1>Шаблоны</h1>
+        <p class="eyebrow">Заготовки для повторяющихся сценариев приёма</p>
+      </div>
+      <div class="page-actions">
+        <button class="button" type="button" data-open-template-form>+ Новый шаблон</button>
+      </div>
+    </section>
+    <section class="toolbar template-toolbar" aria-label="Поиск шаблонов">
+      <div class="field search-field">
+        <label for="templateSearch">Найти шаблон</label>
+        <input id="templateSearch" type="search" value="${escapeHtml(state.templateQuery)}" placeholder="Найти шаблон" autocomplete="off" />
+        <span class="hint" id="templateSearchHint"></span>
+      </div>
+    </section>
+    <div id="templateResults">
+      <section class="state-panel"><div class="spinner" aria-hidden="true"></div><p>Загружаем шаблоны...</p></section>
+    </div>
+  `;
+  try {
+    await loadMedicalTemplates();
+    renderTemplateResults();
+  } catch (error) {
+    document.querySelector("#templateResults").innerHTML = `
+      <section class="state-panel">
+        <h2>Не удалось загрузить шаблоны</h2>
+        <p>${escapeHtml(repositoryMessage(error, "Проверьте соединение и попробуйте ещё раз."))}</p>
+        <button class="button" type="button" data-retry-templates>Повторить</button>
+      </section>
+    `;
+    document.querySelector("[data-retry-templates]")?.addEventListener("click", () => renderTemplatesPage());
+  }
+  document.querySelector("#templateSearch")?.addEventListener("input", (event) => {
+    state.templateQuery = event.target.value;
+    renderTemplateResults();
+  });
+}
+
+function renderTemplateResults() {
+  const query = state.templateQuery.trim();
+  const templates = filteredMedicalTemplates();
+  const hint = document.querySelector("#templateSearchHint");
+  const results = document.querySelector("#templateResults");
+  if (!hint || !results) return;
+  hint.textContent = query ? (templates.length ? `Найдено: ${templates.length}` : "Совпадений нет") : "";
+  if (!state.medicalTemplates.length && !query) {
+    results.innerHTML = `
+      <section class="state-panel template-empty-state">
+        <h2>Шаблонов пока нет</h2>
+        <p>Создайте заготовку для повторяющегося сценария приёма.</p>
+        <button class="button" type="button" data-open-template-form>+ Новый шаблон</button>
+      </section>
+    `;
+  } else if (templates.length) {
+    results.innerHTML = `
+      <section class="template-directory" aria-label="Список шаблонов">
+        <div class="template-directory-header" aria-hidden="true">
+          <span>Название</span>
+          <span>Когда использовать</span>
+          <span>Обновлён</span>
+          <span></span>
+        </div>
+        <div class="template-directory-rows">${templates.map(renderTemplateRow).join("")}</div>
+      </section>
+    `;
+  } else {
+    results.innerHTML = `
+      <section class="state-panel template-empty-state">
+        <h2>Шаблоны не найдены</h2>
+        <p>Проверьте название или создайте новый шаблон.</p>
+        <button class="button" type="button" data-open-template-form>+ Новый шаблон</button>
+      </section>
+    `;
+  }
+  bindTemplateActions(results);
+}
+
+function renderTemplateRow(template) {
+  const indication = template.indication ? template.indication : "—";
+  const updated = template.updatedAt ? formatDate(template.updatedAt.slice(0, 10)) : "Не указано";
+  return `
+    <div class="template-row" role="button" tabindex="0" data-edit-template="${template.id}">
+      <div class="template-title-cell">
+        <strong>${escapeHtml(template.title)}</strong>
+        <span class="mobile-only">${escapeHtml(indication)}</span>
+      </div>
+      <div class="template-indication">${escapeHtml(indication)}</div>
+      <div class="template-updated">${escapeHtml(updated)}</div>
+      <details class="patient-action-menu template-row-menu" data-template-menu>
+        <summary aria-label="Действия шаблона"><span aria-hidden="true">...</span></summary>
+        <div class="patient-action-menu-popover template-action-popover">
+          <button type="button" data-menu-edit-template="${template.id}">Редактировать</button>
+          <button class="danger-menu-button" type="button" data-confirm-delete-template="${template.id}">Удалить шаблон</button>
+        </div>
+      </details>
+    </div>
+  `;
+}
+
+function bindTemplateActions(root = document) {
+  root.querySelectorAll("[data-open-template-form]").forEach((button) => {
+    if (button.dataset.templateBound === "true") return;
+    button.dataset.templateBound = "true";
+    button.addEventListener("click", () => templateForm());
+  });
+  root.querySelectorAll("[data-edit-template]").forEach((row) => {
+    if (row.dataset.templateBound === "true") return;
+    row.dataset.templateBound = "true";
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("[data-template-menu]")) return;
+      const template = state.medicalTemplates.find((item) => item.id === row.dataset.editTemplate);
+      templateForm(template);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("[data-template-menu]")) return;
+      event.preventDefault();
+      const template = state.medicalTemplates.find((item) => item.id === row.dataset.editTemplate);
+      templateForm(template);
+    });
+  });
+  root.querySelectorAll("[data-confirm-delete-template]").forEach((button) => {
+    if (button.dataset.templateBound === "true") return;
+    button.dataset.templateBound = "true";
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const template = state.medicalTemplates.find((item) => item.id === button.dataset.confirmDeleteTemplate);
+      templateDeleteConfirmation(template);
+    });
+  });
+  root.querySelectorAll("[data-menu-edit-template]").forEach((button) => {
+    if (button.dataset.templateBound === "true") return;
+    button.dataset.templateBound = "true";
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const template = state.medicalTemplates.find((item) => item.id === button.dataset.menuEditTemplate);
+      templateForm(template);
+    });
+  });
+}
+
 function renderContactLine(patient) {
   const contacts = [];
   if (patient.phone) contacts.push(`<span class="contact-item"><span aria-hidden="true">☎</span>${escapeHtml(patient.phone)}</span>`);
@@ -2678,6 +2837,146 @@ function patientDeleteConfirmation(patient) {
   });
 }
 
+function templateForm(template = null) {
+  const isEdit = Boolean(template);
+  template = template ? normalizeMedicalTemplate(template) : normalizeMedicalTemplate({});
+  const node = modal(`
+    <form class="template-dialog-form">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">${isEdit ? "Редактирование шаблона" : "Новый шаблон"}</p>
+          <h2>${isEdit ? "Редактировать шаблон" : "Новый шаблон"}</h2>
+        </div>
+        <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
+      </div>
+      <div class="dialog-body edit-form">
+        <section class="form-section">
+          <h3>Основное</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label for="templateTitle">Название</label>
+              <input id="templateTitle" name="title" required value="${escapeHtml(template.title)}" />
+              <span class="error" data-error="title"></span>
+            </div>
+            <div class="field">
+              <label for="templateIndication">Когда использовать</label>
+              <input id="templateIndication" name="indication" value="${escapeHtml(template.indication)}" />
+              <span class="hint">Не добавляйте персональные данные пациента в шаблон.</span>
+            </div>
+          </div>
+        </section>
+        <section class="form-section">
+          <h3>Содержимое шаблона</h3>
+          <div class="form-grid template-content-grid">
+            <div class="field">
+              <label for="templateNote">Что происходит</label>
+              <textarea id="templateNote" name="note">${escapeHtml(template.note)}</textarea>
+            </div>
+            <div class="field">
+              <label for="templateDecision">Решение / лечение</label>
+              <textarea id="templateDecision" name="decision">${escapeHtml(template.decision)}</textarea>
+            </div>
+            <div class="field">
+              <label for="templateNextStep">Дальше</label>
+              <input id="templateNextStep" name="nextStep" value="${escapeHtml(template.nextStep)}" />
+            </div>
+            <div class="field">
+              <label for="templateNextTiming">Когда</label>
+              <input id="templateNextTiming" name="nextStepTiming" value="${escapeHtml(template.nextStepTiming)}" />
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="dialog-actions">
+        <button class="ghost-button" type="button" data-close>Отмена</button>
+        <button class="button" type="submit">Сохранить шаблон</button>
+      </div>
+    </form>
+  `, "template-dialog");
+  node.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const formNode = event.currentTarget;
+    const submit = formNode.querySelector('button[type="submit"]');
+    if (submit?.disabled) return;
+    const form = new FormData(formNode);
+    const input = {
+      title: String(form.get("title") || "").trim(),
+      indication: String(form.get("indication") || "").trim(),
+      note: String(form.get("note") || "").trim(),
+      decision: String(form.get("decision") || "").trim(),
+      nextStep: String(form.get("nextStep") || "").trim(),
+      nextStepTiming: String(form.get("nextStepTiming") || "").trim()
+    };
+    node.querySelectorAll(".error").forEach((item) => (item.textContent = ""));
+    if (!input.title) return (node.querySelector('[data-error="title"]').textContent = "Введите название шаблона");
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = "Сохраняем...";
+    }
+    try {
+      const saved = isEdit
+        ? await repository.updateMedicalTemplate(template.id, input)
+        : await repository.createMedicalTemplate(input);
+      node.remove();
+      await loadMedicalTemplates();
+      renderTemplateResults();
+      showToast(isEdit ? "Шаблон сохранён" : "Шаблон создан");
+      return saved;
+    } catch (error) {
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = "Сохранить шаблон";
+      }
+      const target = node.querySelector('[data-error="title"]');
+      if (target) target.textContent = repositoryMessage(error, "Не удалось сохранить шаблон. Попробуйте ещё раз.");
+    }
+  });
+}
+
+function templateDeleteConfirmation(template) {
+  if (!template) return;
+  const node = modal(`
+    <div class="dialog-head compact-dialog-head">
+      <div>
+        <p class="eyebrow">Архивация шаблона</p>
+        <h2>Удалить шаблон?</h2>
+      </div>
+      <button class="icon-button" type="button" aria-label="Закрыть" data-close>×</button>
+    </div>
+    <div class="dialog-body delete-dialog-body">
+      <h3>${escapeHtml(template.title)}</h3>
+      <p>Шаблон исчезнет из рабочего списка. Это не изменит уже существующие обращения.</p>
+      <p class="form-error" data-template-delete-error hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="ghost-button" type="button" data-close>Отмена</button>
+      <button class="button danger-button" type="button" data-delete-template="${template.id}">Удалить</button>
+    </div>
+  `, "delete-dialog");
+  const deleteButton = node.querySelector("[data-delete-template]");
+  const errorNode = node.querySelector("[data-template-delete-error]");
+  deleteButton.addEventListener("click", async () => {
+    if (deleteButton.disabled) return;
+    deleteButton.disabled = true;
+    node.dataset.modalBusy = "true";
+    deleteButton.textContent = "Удаляем...";
+    errorNode.hidden = true;
+    try {
+      await repository.archiveMedicalTemplate(template.id);
+      node.remove();
+      await loadMedicalTemplates();
+      renderTemplateResults();
+      showToast("Шаблон удалён");
+    } catch (error) {
+      delete node.dataset.modalBusy;
+      deleteButton.disabled = false;
+      deleteButton.textContent = "Удалить";
+      errorNode.textContent = repositoryMessage(error, "Не удалось удалить шаблон. Попробуйте ещё раз.");
+      errorNode.hidden = false;
+    }
+  });
+}
+
 function patientForm(patient = null) {
   const isEdit = Boolean(patient);
   patient = patient ? normalizePatient(patient) : normalizePatient({});
@@ -3000,6 +3299,7 @@ async function route(targetHash = location.hash || "#/") {
   const match = activeHash.match(/^#\/patient\/([^/]+)$/);
   if (encounterMatch) renderEncounterWorkspace(encounterMatch[1], encounterMatch[2]);
   else if (match) renderPatientPage(match[1]);
+  else if (activeHash === "#/templates") await renderTemplatesPage();
   else if (activeHash === "#/patients") renderPatientList();
   else renderHomeDashboard();
   bindActions();
@@ -3008,6 +3308,7 @@ async function route(targetHash = location.hash || "#/") {
 
 function bindActions() {
   bindPatientFormButtons(document);
+  bindTemplateActions(document);
   document.querySelectorAll("[data-open-document-import]").forEach((button) => {
     button.addEventListener("click", openDocumentImport);
   });

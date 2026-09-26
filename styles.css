@@ -300,6 +300,28 @@ h3 {
   max-width: 520px;
 }
 
+.templates-head {
+  margin-bottom: var(--s3);
+}
+
+.templates-head .button {
+  min-height: 38px;
+}
+
+.template-toolbar {
+  max-width: none;
+  margin-bottom: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.template-toolbar .search-field {
+  max-width: 420px;
+}
+
 .dashboard-head {
   margin-bottom: var(--s3);
 }
@@ -650,10 +672,27 @@ textarea {
   box-shadow: var(--shadow-sm);
 }
 
+.template-directory {
+  width: 100%;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
 .patient-directory-header,
 .patient-card {
   display: grid;
   grid-template-columns: 42px minmax(260px, 1.3fr) minmax(190px, 0.85fr) minmax(190px, 0.9fr) 20px;
+  column-gap: var(--s4);
+  align-items: center;
+}
+
+.template-directory-header,
+.template-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.45fr) minmax(240px, 0.95fr) minmax(128px, 0.32fr) 44px;
   column-gap: var(--s4);
   align-items: center;
 }
@@ -670,11 +709,32 @@ textarea {
   text-transform: uppercase;
 }
 
+.template-directory-header {
+  min-height: 38px;
+  padding: 0 var(--s4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.template-directory-header span {
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .patient-directory-header span:first-child {
   grid-column: 1 / span 2;
 }
 
 .patient-directory-rows {
+  display: block;
+}
+
+.template-directory-rows {
   display: block;
 }
 
@@ -703,8 +763,112 @@ textarea {
   border-bottom: 0;
 }
 
+.template-row {
+  position: relative;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px var(--s4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.template-row:last-child {
+  border-bottom: 0;
+}
+
 .patient-card:hover {
   background: color-mix(in srgb, var(--accent), white 96%);
+}
+
+.template-row:hover,
+.template-row:focus-visible {
+  background: color-mix(in srgb, var(--accent), white 96%);
+}
+
+.template-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent), white 28%);
+  outline-offset: -3px;
+}
+
+.template-title-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.template-title-cell strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.94rem;
+  font-weight: 760;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.template-indication,
+.template-updated {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-row-menu {
+  position: relative;
+  justify-self: end;
+}
+
+.template-row-menu summary {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 800;
+  list-style: none;
+  cursor: pointer;
+}
+
+.template-row-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.template-row-menu[open] summary {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.template-action-popover {
+  min-width: 180px;
+  right: 0;
+  left: auto;
+}
+
+.template-action-popover button {
+  display: flex;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.56rem 0.72rem;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 650;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.template-action-popover button:hover,
+.template-action-popover button:focus-visible {
+  background: var(--surface-secondary);
 }
 
 .patient-directory .patient-card:focus-visible {
@@ -1454,6 +1618,11 @@ textarea {
 
 .patient-dialog {
   width: min(94vw, 1420px);
+  max-height: calc(100vh - 32px);
+}
+
+.template-dialog {
+  width: min(92vw, 860px);
   max-height: calc(100vh - 32px);
 }
 
@@ -3120,6 +3289,45 @@ textarea {
   max-height: 96px;
 }
 
+.template-dialog-form .dialog-head,
+.template-dialog-form .dialog-actions {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.template-dialog-form .dialog-head {
+  top: 0;
+}
+
+.template-dialog-form .dialog-actions {
+  bottom: 0;
+}
+
+.template-dialog-form .edit-form {
+  display: grid;
+  gap: var(--s3);
+  background: var(--surface);
+}
+
+.template-dialog-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.template-dialog-form .template-content-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.template-dialog-form textarea {
+  min-height: 84px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.template-dialog-form input {
+  min-height: 38px;
+}
+
 .form-section h3 {
   padding-bottom: var(--s2);
   border-bottom: 1px solid var(--border);
@@ -3339,11 +3547,17 @@ textarea {
     padding: var(--s2);
   }
 
-  .patient-directory-toolbar .search-field {
+  .patient-directory-toolbar .search-field,
+  .template-toolbar .search-field {
     max-width: none;
   }
 
-  .patient-directory-header {
+  .template-toolbar {
+    padding: var(--s2);
+  }
+
+  .patient-directory-header,
+  .template-directory-header {
     display: none;
   }
 
@@ -3372,6 +3586,36 @@ textarea {
 
   .patient-card .chevron {
     grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .template-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--s2) var(--s3);
+    min-height: 70px;
+    padding: var(--s3);
+  }
+
+  .template-title-cell {
+    grid-column: 1;
+  }
+
+  .template-title-cell strong,
+  .template-title-cell .mobile-only {
+    white-space: normal;
+  }
+
+  .template-indication {
+    display: none;
+  }
+
+  .template-updated {
+    grid-column: 1;
+  }
+
+  .template-row-menu {
+    grid-column: 2;
     grid-row: 1 / span 2;
     align-self: center;
   }
@@ -3430,6 +3674,8 @@ textarea {
   }
 
   .patient-dialog-form .edit-form,
+  .template-dialog-form .form-grid,
+  .template-dialog-form .template-content-grid,
   .patient-dialog-form .form-section:first-child .form-grid,
   .patient-dialog-form .form-section:nth-child(3) .form-grid,
   .patient-dialog-form .form-section:nth-child(4) .form-grid {
