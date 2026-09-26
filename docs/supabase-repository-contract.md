@@ -281,6 +281,39 @@ Attachment and signed URL behavior is intentionally conservative:
 - metadata is not silently removed when object deletion fails;
 - object/metadata mismatch repair is an administrative audit concern, not automatic product behavior.
 
+## Medical Templates Foundation
+
+Medical templates are doctor-owned reusable text drafts. They are not a clinical decision engine, are not linked to patients or visits, and do not store attachments.
+
+Canonical application shape:
+
+```text
+MedicalTemplate {
+  id,
+  title,
+  indication,
+  note,
+  decision,
+  nextStep,
+  nextStepTiming,
+  isArchived,
+  createdAt,
+  updatedAt
+}
+```
+
+Cloud repository methods:
+
+- `listMedicalTemplates(options)`: reads templates for the authenticated doctor through RLS. By default, archived templates are excluded.
+- `getMedicalTemplate(id)`: reads one owned template or returns `null`.
+- `createMedicalTemplate(input)`: validates a non-empty trimmed title and stores generic text fields.
+- `updateMedicalTemplate(id, patch)`: validates title when present and updates only supplied fields.
+- `archiveMedicalTemplate(id)`: soft-deletes by setting `isArchived = true`.
+
+Templates are Supabase-authoritative. The legacy IndexedDB repository does not persist templates and is not a fallback or sync target. Template UI and Visit Mode application are intentionally not wired in this foundation slice.
+
+`updated_at` follows the existing database trigger pattern through `public.set_updated_at()`. Template writes do not use Visit-style optimistic concurrency; v1 is last-write-wins.
+
 Known cloud MVP debt:
 
 - hydrate uses an N+1 pattern: one patient query, then one visit query and one attachment query per patient. For `N` patients this is `1 + 2N` medical reads, plus patient weight reads inside the patient repository. This is acceptable for tiny MVP datasets and should become batched reads or pagination before larger production use.

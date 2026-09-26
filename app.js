@@ -16,6 +16,8 @@ const VISIT_SELECT_COLUMNS =
   "id, patient_id, date, format, status, note, decision, next_step, next_step_timing, started_at, completed_at, created_at, updated_at, version";
 const ATTACHMENT_SELECT_COLUMNS =
   "id, patient_id, visit_id, kind, original_filename, mime_type, size_bytes, storage_bucket, storage_path, added_at, created_at";
+const MEDICAL_TEMPLATE_SELECT_COLUMNS =
+  "id, title, indication, note, decision, next_step, next_step_timing, is_archived, created_at, updated_at";
 const REPOSITORY_ERROR_TYPES = {
   AUTH: "AUTH",
   NETWORK: "NETWORK",
@@ -114,6 +116,21 @@ function normalizeVisit(visit) {
     nextStepTiming: visit.nextStepTiming || "",
     startedAt: visit.startedAt || visit.createdAt || nowISO(),
     version: Number.isInteger(Number(visit.version)) && Number(visit.version) > 0 ? Number(visit.version) : 1
+  };
+}
+
+function normalizeMedicalTemplate(template) {
+  return {
+    id: template.id || "",
+    title: String(template.title || "").trim(),
+    indication: template.indication || "",
+    note: template.note || "",
+    decision: template.decision || "",
+    nextStep: template.nextStep || "",
+    nextStepTiming: template.nextStepTiming || "",
+    isArchived: Boolean(template.isArchived),
+    createdAt: template.createdAt || "",
+    updatedAt: template.updatedAt || ""
   };
 }
 
@@ -341,6 +358,54 @@ function mapVisitUpdateInputToSupabasePayload(input = {}) {
   if ("startedAt" in input) payload.started_at = input.startedAt || nowISO();
   if ("completedAt" in input) payload.completed_at = input.completedAt || null;
   if (payload.status === "completed" && !payload.completed_at) payload.completed_at = nowISO();
+  return payload;
+}
+
+function validateMedicalTemplateTitle(title) {
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedTitle) {
+    throw new RepositoryError(REPOSITORY_ERROR_TYPES.UNKNOWN, "Template title is required.");
+  }
+  return normalizedTitle;
+}
+
+function mapMedicalTemplateRow(row = {}) {
+  return normalizeMedicalTemplate({
+    id: row.id,
+    title: row.title,
+    indication: row.indication || "",
+    note: row.note || "",
+    decision: row.decision || "",
+    nextStep: row.next_step || "",
+    nextStepTiming: row.next_step_timing || "",
+    isArchived: Boolean(row.is_archived),
+    createdAt: optionalText(row.created_at),
+    updatedAt: optionalText(row.updated_at)
+  });
+}
+
+function mapMedicalTemplateInputToSupabasePayload(input = {}, doctorId) {
+  return {
+    doctor_id: doctorId,
+    title: validateMedicalTemplateTitle(input.title),
+    indication: String(input.indication || ""),
+    note: String(input.note || ""),
+    decision: String(input.decision || ""),
+    next_step: String(input.nextStep || ""),
+    next_step_timing: String(input.nextStepTiming || ""),
+    is_archived: Boolean(input.isArchived)
+  };
+}
+
+function mapMedicalTemplateUpdateInputToSupabasePayload(input = {}) {
+  const payload = {};
+  if ("title" in input) payload.title = validateMedicalTemplateTitle(input.title);
+  if ("indication" in input) payload.indication = String(input.indication || "");
+  if ("note" in input) payload.note = String(input.note || "");
+  if ("decision" in input) payload.decision = String(input.decision || "");
+  if ("nextStep" in input) payload.next_step = String(input.nextStep || "");
+  if ("nextStepTiming" in input) payload.next_step_timing = String(input.nextStepTiming || "");
+  if ("isArchived" in input) payload.is_archived = Boolean(input.isArchived);
   return payload;
 }
 
@@ -598,6 +663,10 @@ const supabaseRepository = (() => {
     return query.select(ATTACHMENT_SELECT_COLUMNS);
   }
 
+  function selectMedicalTemplateColumns(query) {
+    return query.select(MEDICAL_TEMPLATE_SELECT_COLUMNS);
+  }
+
   function attachmentBucket() {
     if (!supabaseClient) throw new RepositoryError(REPOSITORY_ERROR_TYPES.AUTH, "Supabase client is unavailable.");
     return supabaseClient.storage.from(STORAGE_ATTACHMENTS_BUCKET);
@@ -621,6 +690,44 @@ const supabaseRepository = (() => {
   return {
     async getPatients() {
       return readPatientsWithWeights(selectPatientColumns(from("patients")));
+    },
+    async listMedicalTemplates(options = {}) {
+      await requireSupabaseSession();
+      let query = selectMedicalTemplateColumns(from("medical_templates")).order("updated_at", { ascending: false });
+      if (!options.includeArchived) query = query.eq("is_archived", false);
+      const { data, error } = await query;
+      if (error) throwRepositoryError(error, "Unable to read medical templates.");
+      return (data || []).map(mapMedicalTemplateRow);
+    },
+    async getMedicalTemplate(id) {
+      await requireSupabaseSession();
+      const { data, error } = await selectMedicalTemplateColumns(from("medical_templates")).eq("id", id).maybeSingle();
+      if (error) throwRepositoryError(error, "Unable to read medical template.");
+      return data ? mapMedicalTemplateRow(data) : null;
+    },
+    async createMedicalTemplate(input) {
+      const session = await requireSupabaseSession();
+      const { data, error } = await from("medical_templates")
+        .insert(mapMedicalTemplateInputToSupabasePayload(input, session.user.id))
+        .select(MEDICAL_TEMPLATE_SELECT_COLUMNS)
+        .single();
+      if (error) throwRepositoryError(error, "Unable to create medical template.");
+      return mapMedicalTemplateRow(data);
+    },
+    async updateMedicalTemplate(id, patch) {
+      await requireSupabaseSession();
+      const payload = mapMedicalTemplateUpdateInputToSupabasePayload(patch);
+      if (!Object.keys(payload).length) return this.getMedicalTemplate(id);
+      const { data, error } = await from("medical_templates")
+        .update(payload)
+        .eq("id", id)
+        .select(MEDICAL_TEMPLATE_SELECT_COLUMNS)
+        .single();
+      if (error) throwRepositoryError(error, "Unable to update medical template.");
+      return mapMedicalTemplateRow(data);
+    },
+    async archiveMedicalTemplate(id) {
+      return this.updateMedicalTemplate(id, { isArchived: true });
     },
     async getPatient(id) {
       const patients = await readPatientsWithWeights(selectPatientColumns(from("patients")).eq("id", id));
