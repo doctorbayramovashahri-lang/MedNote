@@ -25,6 +25,12 @@ const REPOSITORY_ERROR_TYPES = {
   CONFLICT: "CONFLICT",
   UNKNOWN: "UNKNOWN"
 };
+const TEMPLATE_VISIT_FIELDS = [
+  { key: "note", label: "Что происходит" },
+  { key: "decision", label: "Решение / лечение" },
+  { key: "nextStep", label: "Дальше" },
+  { key: "nextStepTiming", label: "Когда" }
+];
 
 const app = document.querySelector("#app");
 const logoutButton = document.querySelector("#logoutButton");
@@ -2360,6 +2366,188 @@ function bindTemplateActions(root = document) {
   });
 }
 
+function templateSearchResults(templates, query = "") {
+  const needle = query.trim().toLowerCase();
+  return templates
+    .filter((template) => !template.isArchived)
+    .filter((template) => !needle || template.title.toLowerCase().includes(needle))
+    .sort((a, b) => `${b.updatedAt || ""}`.localeCompare(`${a.updatedAt || ""}`) || a.title.localeCompare(b.title, "ru"));
+}
+
+function templatePreviewRows(template, readVisitField) {
+  return TEMPLATE_VISIT_FIELDS
+    .map(({ key, label }) => {
+      const templateValue = String(template[key] || "");
+      if (!templateValue.trim()) return null;
+      const visitValue = String(readVisitField(key) || "");
+      const willAdd = visitValue.trim() === "";
+      return { key, label, value: templateValue, willAdd };
+    })
+    .filter(Boolean);
+}
+
+async function openTemplatePicker({ readVisitField, applyTemplate, isApplyDisabled }) {
+  if (isApplyDisabled?.()) return;
+  let templates = [];
+  let query = "";
+  const node = modal(`
+    <div class="dialog-head compact-dialog-head">
+      <div>
+        <p class="eyebrow">Шаблоны приёма</p>
+        <h2>Выбрать шаблон</h2>
+      </div>
+      <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
+    </div>
+    <div class="dialog-body template-picker-body">
+      <div class="field">
+        <label for="templatePickerSearch">Найти шаблон</label>
+        <input id="templatePickerSearch" type="search" placeholder="Найти шаблон" autocomplete="off" />
+      </div>
+      <div data-template-picker-results>
+        <section class="state-panel compact-state"><div class="spinner" aria-hidden="true"></div><p>Загружаем шаблоны...</p></section>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="ghost-button" type="button" data-close>Отмена</button>
+    </div>
+  `, "template-picker-dialog");
+  const results = node.querySelector("[data-template-picker-results]");
+  const search = node.querySelector("#templatePickerSearch");
+
+  const renderResults = () => {
+    const visible = templateSearchResults(templates, query);
+    if (!templates.length) {
+      results.innerHTML = `
+        <section class="state-panel template-picker-empty">
+          <h2>Шаблонов пока нет</h2>
+          <p>Создайте шаблон, чтобы быстрее заполнять повторяющиеся части приёма.</p>
+          <a class="ghost-button" href="#/templates" data-close>Перейти к шаблонам</a>
+        </section>
+      `;
+      return;
+    }
+    if (!visible.length) {
+      results.innerHTML = `<section class="state-panel template-picker-empty"><h2>Шаблоны не найдены</h2><p>Проверьте название шаблона.</p></section>`;
+      return;
+    }
+    results.innerHTML = `
+      <div class="template-picker-list">
+        ${visible
+          .map(
+            (template) => `
+              <button class="template-picker-item" type="button" data-pick-template="${template.id}">
+                <strong>${escapeHtml(template.title)}</strong>
+                ${template.indication ? `<span>${escapeHtml(template.indication)}</span>` : ""}
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+    results.querySelectorAll("[data-pick-template]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        if (isApplyDisabled?.()) return;
+        button.disabled = true;
+        try {
+          const selected = await repository.getMedicalTemplate(button.dataset.pickTemplate);
+          if (!selected || selected.isArchived) throw new Error("Шаблон больше недоступен.");
+          node.remove();
+          openTemplatePreview(normalizeMedicalTemplate(selected), { readVisitField, applyTemplate, isApplyDisabled });
+        } catch (error) {
+          button.disabled = false;
+          results.innerHTML = `
+            <section class="state-panel template-picker-empty">
+              <h2>Не удалось открыть шаблон</h2>
+              <p>${escapeHtml(repositoryMessage(error, "Шаблон больше недоступен. Обновите список и попробуйте ещё раз."))}</p>
+              <button class="button" type="button" data-retry-template-picker>Повторить</button>
+            </section>
+          `;
+          results.querySelector("[data-retry-template-picker]")?.addEventListener("click", () => {
+            renderResults();
+          });
+        }
+      });
+    });
+  };
+
+  search.addEventListener("input", (event) => {
+    query = event.target.value;
+    renderResults();
+  });
+
+  try {
+    templates = (await repository.listMedicalTemplates()).map(normalizeMedicalTemplate).filter((template) => !template.isArchived);
+    state.medicalTemplates = templates;
+    renderResults();
+  } catch (error) {
+    results.innerHTML = `
+      <section class="state-panel template-picker-empty">
+        <h2>Не удалось загрузить шаблоны</h2>
+        <p>${escapeHtml(repositoryMessage(error, "Проверьте соединение и попробуйте ещё раз."))}</p>
+        <button class="button" type="button" data-retry-template-picker>Повторить</button>
+      </section>
+    `;
+    results.querySelector("[data-retry-template-picker]")?.addEventListener("click", () => {
+      node.remove();
+      openTemplatePicker({ readVisitField, applyTemplate, isApplyDisabled });
+    });
+  }
+}
+
+function openTemplatePreview(template, { readVisitField, applyTemplate, isApplyDisabled }) {
+  const rows = templatePreviewRows(template, readVisitField);
+  const addableRows = rows.filter((row) => row.willAdd);
+  const node = modal(`
+    <div class="dialog-head compact-dialog-head">
+      <div>
+        <p class="eyebrow">Шаблон</p>
+        <h2>Применить шаблон</h2>
+      </div>
+      <button class="icon-button" type="button" data-close aria-label="Закрыть">×</button>
+    </div>
+    <div class="dialog-body template-preview-body">
+      <section class="template-preview-title">
+        <h3>${escapeHtml(template.title)}</h3>
+        ${template.indication ? `<p>${escapeHtml(template.indication)}</p>` : ""}
+      </section>
+      ${
+        rows.length
+          ? `<div class="template-preview-fields">
+              ${rows
+                .map(
+                  (row) => `
+                    <section class="template-preview-field ${row.willAdd ? "will-add" : "will-skip"}">
+                      <div>
+                        <h4>${escapeHtml(row.label)}</h4>
+                        <span>${row.willAdd ? "Будет добавлено" : "Не изменится — поле уже заполнено"}</span>
+                      </div>
+                      <p>${escapeHtml(row.value)}</p>
+                    </section>
+                  `
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
+      ${
+        addableRows.length
+          ? ""
+          : `<section class="state-panel template-noop-state"><h2>Нечего добавлять</h2><p>Все подходящие поля уже заполнены или шаблон не содержит данных.</p></section>`
+      }
+    </div>
+    <div class="dialog-actions">
+      <button class="ghost-button" type="button" data-close>Отмена</button>
+      <button class="button" type="button" data-apply-selected-template ${addableRows.length ? "" : "disabled"}>Применить</button>
+    </div>
+  `, "template-picker-dialog template-preview-dialog");
+  node.querySelector("[data-apply-selected-template]")?.addEventListener("click", () => {
+    if (!addableRows.length || isApplyDisabled?.()) return;
+    applyTemplate(template);
+    node.remove();
+    showToast("Шаблон применён");
+  });
+}
+
 function renderContactLine(patient) {
   const contacts = [];
   if (patient.phone) contacts.push(`<span class="contact-item"><span aria-hidden="true">☎</span>${escapeHtml(patient.phone)}</span>`);
@@ -2637,6 +2825,9 @@ function renderEncounterWorkspace(patientId, visitId) {
           <p class="eyebrow encounter-back"><a href="#/patient/${patient.id}">← Карточка пациента</a></p>
           <h1>${escapeHtml(patient.fullName)}</h1>
           <p class="patient-meta">${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)} · ${draftLabel}</p>
+        </div>
+        <div class="encounter-header-actions">
+          <button class="ghost-button" type="button" data-open-template-picker>Применить шаблон</button>
         </div>
       </header>
       <section class="encounter-patient-context" aria-label="Контекст пациента">
@@ -3444,6 +3635,9 @@ function bindEncounterWorkspace(patientId, visitId) {
     conflictLocked = true;
     if (saveTimer) window.clearTimeout(saveTimer);
     setSaveStateText("Запись изменилась в другой вкладке или на другом устройстве. Обновите данные перед продолжением.");
+    document.querySelectorAll("[data-open-template-picker]").forEach((button) => {
+      button.disabled = true;
+    });
   };
 
   const setSaveErrorState = () => {
@@ -3494,6 +3688,27 @@ function bindEncounterWorkspace(patientId, visitId) {
   });
   document.querySelectorAll('input[name="encounterFormat"]').forEach((field) => {
     field.addEventListener("change", scheduleSave);
+  });
+  const readEncounterField = (key) => document.querySelector(`[data-encounter-field="${key}"]`)?.value || "";
+  const applyTemplateToEncounter = (template) => {
+    TEMPLATE_VISIT_FIELDS.forEach(({ key }) => {
+      const field = document.querySelector(`[data-encounter-field="${key}"]`);
+      const value = String(template[key] || "");
+      if (!field || !value.trim() || String(field.value || "").trim()) return;
+      field.value = value;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    window.setTimeout(() => document.querySelector("[data-open-template-picker]")?.focus(), 0);
+  };
+  document.querySelectorAll("[data-open-template-picker]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (conflictLocked) return;
+      openTemplatePicker({
+        readVisitField: readEncounterField,
+        applyTemplate: applyTemplateToEncounter,
+        isApplyDisabled: () => conflictLocked
+      });
+    });
   });
   document.querySelectorAll("[data-encounter-add-file]").forEach((input) => {
     input.addEventListener("change", async (event) => {
