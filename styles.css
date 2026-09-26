@@ -993,6 +993,18 @@ textarea {
   white-space: nowrap;
 }
 
+.patient-delete-action {
+  color: #9f1d1d;
+  border-color: #f0c8c8;
+  background: #fff8f8;
+}
+
+.patient-delete-action:hover,
+.patient-delete-action:focus-visible {
+  border-color: #e7a9a9;
+  background: #fff1f1;
+}
+
 .patient-action-menu {
   position: relative;
 }

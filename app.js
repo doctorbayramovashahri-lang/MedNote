@@ -2749,12 +2749,7 @@ function renderPatientPage(patientId) {
       <div class="patient-actions">
         <button class="button" type="button" data-start-encounter="${patient.id}">${draft ? "Продолжить обращение" : "Новое обращение"}</button>
         <button class="ghost-button" type="button" data-open-patient-form="${patient.id}">Редактировать данные</button>
-        <details class="patient-action-menu">
-          <summary aria-label="Действия пациента">…</summary>
-          <div class="patient-action-menu-popover">
-            <button class="danger-menu-button" type="button" data-confirm-delete-patient="${patient.id}">Удалить пациента</button>
-          </div>
-        </details>
+        <button class="ghost-button patient-delete-action" type="button" data-confirm-delete-patient="${patient.id}">Удалить пациента</button>
       </div>
     </section>
     ${nextStep ? `<section class="profile-section next-step-card patient-next-step"><h2>Дальше</h2><p>${escapeHtml(nextStep)}</p></section>` : ""}
