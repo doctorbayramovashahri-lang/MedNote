@@ -72,6 +72,16 @@ function initials(fullName) {
     .toUpperCase();
 }
 
+function patientAvatarHtml(patient, className = "patient-avatar") {
+  const photoUrl = patient.photoUrl || patient.avatarUrl || patient.imageUrl || "";
+  if (photoUrl) return `<div class="${className} has-image" aria-hidden="true"><img src="${escapeHtml(photoUrl)}" alt="" /></div>`;
+  if (patient.sex === "male" || patient.sex === "female") {
+    const src = patient.sex === "male" ? "patient-avatar-male.png" : "patient-avatar-female.png";
+    return `<div class="${className} has-image default-${patient.sex}" aria-hidden="true"><img src="${src}" alt="" /></div>`;
+  }
+  return `<div class="${className}" aria-hidden="true">${escapeHtml(initials(patient.fullName || ""))}</div>`;
+}
+
 function calculateAge(birthDate) {
   const birth = new Date(`${birthDate}T00:00:00`);
   const today = new Date();
@@ -1405,7 +1415,7 @@ function renderDashboardRecentPatient({ patient, visit }) {
   const lastVisit = visit ? `${formatShortDate(visit.date)} · ${visitFormatLabel(visit.format)}` : "обращений нет";
   return `
     <a class="dashboard-row dashboard-patient-row" href="#/patient/${patient.id}">
-      <div class="patient-avatar" aria-hidden="true">${escapeHtml(initials(patient.fullName))}</div>
+      ${patientAvatarHtml(patient)}
       <div class="dashboard-row-main">
         <strong>${escapeHtml(patient.fullName)}</strong>
         <span>${escapeHtml(birth)}</span>
@@ -2182,8 +2192,6 @@ function renderPatientResults() {
     ? `<section class="patient-directory" aria-label="Список пациентов">
         <div class="patient-directory-header" aria-hidden="true">
           <span>Пациент</span>
-          <span>Возраст / дата рождения</span>
-          <span>Последний приём</span>
           <span></span>
         </div>
         <div class="patient-directory-rows">${patients.map(renderPatientCard).join("")}</div>
@@ -2194,18 +2202,14 @@ function renderPatientResults() {
 
 function renderPatientCard(patient) {
   const visit = latestVisit(patient.id);
-  const birth = patient.birthDate ? formatDate(patient.birthDate) : "дата рождения не указана";
-  const age = patient.birthDate ? `${calculateAge(patient.birthDate)} лет` : "возраст не указан";
-  const lastVisit = visit ? formatShortDate(visit.date) : "обращений нет";
+  const meta = patientIdentityMeta(patient, visit);
   return `
     <a class="patient-card" href="#/patient/${patient.id}">
-      <div class="patient-avatar" aria-hidden="true">${escapeHtml(initials(patient.fullName))}</div>
+      ${patientAvatarHtml(patient)}
       <div class="patient-card-main">
         <div class="patient-name">${escapeHtml(patient.fullName)}</div>
-        <div class="patient-meta mobile-only">${escapeHtml(age)} · ${escapeHtml(birth)}</div>
+        ${meta ? `<div class="patient-meta">${meta}</div>` : ""}
       </div>
-      <div class="patient-meta patient-age">${escapeHtml(age)} · ${escapeHtml(birth)}</div>
-      <div class="patient-last">Последний приём: ${escapeHtml(lastVisit)}</div>
       <span class="chevron" aria-hidden="true">›</span>
     </a>
   `;
@@ -2550,16 +2554,28 @@ function openTemplatePreview(template, { readVisitField, applyTemplate, isApplyD
 
 function renderContactLine(patient) {
   const contacts = [];
-  if (patient.phone) contacts.push(`<span class="contact-item"><span aria-hidden="true">☎</span>${escapeHtml(patient.phone)}</span>`);
-  if (patient.email) contacts.push(`<span class="contact-item"><span aria-hidden="true">@</span>${escapeHtml(patient.email)}</span>`);
-  return contacts.length ? `<div class="contact-line">${contacts.join("")}</div>` : "";
+  if (patient.phone) contacts.push(escapeHtml(patient.phone));
+  if (patient.email) contacts.push(escapeHtml(patient.email));
+  return contacts.length ? `<p class="contact-line">${contacts.join(" · ")}</p>` : "";
 }
 
-function renderMetricStrip(patient) {
+function patientIdentityMeta(patient, visit = latestVisit(patient.id)) {
+  const parts = [];
+  if (patient.birthDate) {
+    parts.push(`${calculateAge(patient.birthDate)} лет`);
+    parts.push(formatDate(patient.birthDate));
+  }
+  if (patient.phone) parts.push(patient.phone);
+  if (patient.email) parts.push(patient.email);
+  if (visit?.date) parts.push(`Последний приём: ${formatShortDate(visit.date)}`);
+  return parts.map((part) => escapeHtml(part)).join(" · ");
+}
+
+function renderMetricStrip(patient, { includeWeightDate = true } = {}) {
   const weight = latestWeight(patient);
   const bmi = bmiValue(patient.heightCm, weight?.valueKg);
   const weightHistory = [...(patient.weightHistory || [])].sort((a, b) => `${b.measuredAt || ""}`.localeCompare(`${a.measuredAt || ""}`));
-  const weightMeta = weight
+  const weightMeta = includeWeightDate && weight
     ? `<button class="metric-meta metric-history-trigger" type="button" data-weight-history="${patient.id}">${formatDate(weight.measuredAt)}${weightHistory.length > 1 ? ` · История ${weightHistory.length}` : ""}</button>`
     : "";
   const metrics = [
@@ -2719,21 +2735,19 @@ function renderPatientPage(patientId) {
       <div>
         <p class="eyebrow"><a href="#/">Пациенты</a> / карточка пациента</p>
         <h1>Карточка пациента</h1>
-        <p>${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}${patient.sex ? ` · ${sexLabel(patient.sex)}` : ""}</p>
       </div>
-      <button class="button" type="button" data-start-encounter="${patient.id}">${draft ? "Продолжить обращение" : "Новое обращение"}</button>
     </section>
     <section class="patient-hero">
       <div class="patient-identity">
-        <div class="patient-avatar" aria-hidden="true">${escapeHtml(initials(patient.fullName))}</div>
+        ${patientAvatarHtml(patient)}
         <div>
-          <p class="patient-meta">${calculateAge(patient.birthDate)} лет · ${formatDate(patient.birthDate)}${patient.sex ? ` · ${sexLabel(patient.sex)}` : ""}</p>
           <h2>${escapeHtml(patient.fullName)}</h2>
-          <p class="patient-last">Последний приём: ${latest ? formatShortDate(latest.date) : "обращений нет"}</p>
-          ${renderContactLine(patient)}
+          ${patientIdentityMeta(patient, latest) ? `<p class="patient-meta">${patientIdentityMeta(patient, latest)}</p>` : ""}
         </div>
       </div>
+      ${renderMetricStrip(patient, { includeWeightDate: false })}
       <div class="patient-actions">
+        <button class="button" type="button" data-start-encounter="${patient.id}">${draft ? "Продолжить обращение" : "Новое обращение"}</button>
         <button class="ghost-button" type="button" data-open-patient-form="${patient.id}">Редактировать данные</button>
         <details class="patient-action-menu">
           <summary aria-label="Действия пациента">…</summary>
@@ -2743,11 +2757,10 @@ function renderPatientPage(patientId) {
         </details>
       </div>
     </section>
+    ${nextStep ? `<section class="profile-section next-step-card patient-next-step"><h2>Дальше</h2><p>${escapeHtml(nextStep)}</p></section>` : ""}
     <section class="patient-layout patient-card-layout">
       <aside class="profile-read" aria-label="Профиль пациента">
-        ${renderMetricStrip(patient)}
         ${renderImportant(patient)}
-        ${nextStep ? `<section class="profile-section next-step-card"><h2>Дальше</h2><p>${escapeHtml(nextStep)}</p></section>` : ""}
         ${renderAbout(patient)}
       </aside>
       <section class="history">

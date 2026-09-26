@@ -660,7 +660,7 @@ textarea {
 .patient-directory-header,
 .patient-card {
   display: grid;
-  grid-template-columns: 42px minmax(260px, 1.3fr) minmax(190px, 0.85fr) minmax(190px, 0.9fr) 20px;
+  grid-template-columns: 60px minmax(0, 1fr) 20px;
   column-gap: var(--s4);
   align-items: center;
 }
@@ -702,10 +702,6 @@ textarea {
   white-space: nowrap;
 }
 
-.patient-directory-header span:first-child {
-  grid-column: 1 / span 2;
-}
-
 .patient-directory-rows {
   display: block;
 }
@@ -725,8 +721,8 @@ textarea {
 
 .patient-card {
   width: 100%;
-  min-height: 58px;
-  padding: 8px var(--s4);
+  min-height: 82px;
+  padding: var(--s3) var(--s4);
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
@@ -860,24 +856,46 @@ textarea {
 .patient-avatar {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 60px;
+  height: 60px;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
   border-radius: 50%;
+  overflow: hidden;
   background: #e7f1ef;
   color: var(--accent);
   font-size: 0.86rem;
   font-weight: 760;
+  align-self: center;
+}
+
+.patient-avatar.has-image {
+  background: #eef5f3;
+}
+
+.patient-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.patient-avatar.default-male img {
+  transform: translateY(2%) scale(0.92);
+  transform-origin: center;
 }
 
 .patient-card-main {
   display: grid;
-  gap: var(--s1);
+  gap: 4px;
   min-width: 0;
 }
 
 .patient-name {
   color: var(--text-primary);
-  font-size: 0.98rem;
+  font-size: 1.02rem;
   font-weight: 760;
   line-height: 1.25;
 }
@@ -936,10 +954,11 @@ textarea {
 
 .patient-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--s3);
+  grid-template-columns: minmax(420px, 1fr) minmax(260px, 0.44fr) auto;
+  gap: var(--s5);
   align-items: center;
-  padding: var(--s3) var(--s4);
+  min-height: 176px;
+  padding: var(--s5);
   margin-bottom: var(--s3);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -963,7 +982,15 @@ textarea {
 .patient-actions {
   display: flex;
   align-items: center;
+  flex-direction: column;
   gap: var(--s2);
+  justify-content: flex-end;
+}
+
+.patient-actions .button,
+.patient-actions .ghost-button {
+  width: 100%;
+  white-space: nowrap;
 }
 
 .patient-action-menu {
@@ -1024,22 +1051,23 @@ textarea {
 
 .patient-identity {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: var(--s3);
+  grid-template-columns: 126px minmax(0, 1fr);
+  gap: var(--s5);
   align-items: center;
   min-width: 0;
 }
 
 .patient-identity .patient-avatar {
-  width: 44px;
-  height: 44px;
+  width: 126px;
+  height: 126px;
+  align-self: center;
 }
 
 .patient-identity h2 {
-  margin-bottom: var(--s1);
+  margin-bottom: 6px;
   max-width: 44ch;
   color: var(--text-primary);
-  font-size: 1.18rem;
+  font-size: 1.58rem;
   line-height: 1.18;
 }
 
@@ -1057,36 +1085,15 @@ textarea {
 }
 
 .patient-card-layout {
-  grid-template-columns: minmax(280px, 0.36fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .contact-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
-  margin-top: var(--s3);
+  margin: var(--s1) 0 0;
   color: var(--text-secondary);
-  font-size: 0.86rem;
-}
-
-.contact-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
   overflow-wrap: anywhere;
-}
-
-.contact-item span {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  border-radius: 50%;
-  background: var(--surface-secondary);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
 }
 
 .metric-strip,
@@ -1098,25 +1105,17 @@ textarea {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(70px, 1fr));
+  border: 0;
+  background: transparent;
 }
 
 .metric-item {
   display: grid;
   gap: 2px;
   align-content: start;
-  padding: var(--s3);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-.metric-item:nth-child(2n),
-.metric-item:last-child {
-  border-right: 0;
-}
-
-.metric-item:nth-last-child(-n + 2) {
-  border-bottom: 0;
+  padding: 0 var(--s3) 0 0;
+  border: 0;
 }
 
 .metric-item span,
@@ -1127,7 +1126,7 @@ textarea {
 }
 
 .metric-item strong {
-  font-size: 1.04rem;
+  font-size: 1.14rem;
   font-weight: 720;
 }
 
@@ -1161,6 +1160,17 @@ textarea {
   display: grid;
   gap: var(--s2);
   padding: var(--s3);
+}
+
+.patient-next-step {
+  margin-bottom: var(--s3);
+}
+
+.patient-next-step p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.45;
 }
 
 .profile-section h2 {
@@ -3594,6 +3604,9 @@ textarea {
 
   .patient-hero {
     align-items: stretch;
+    gap: var(--s3);
+    min-height: 0;
+    padding: var(--s4);
   }
 
   .patient-actions {
@@ -3603,6 +3616,20 @@ textarea {
 
   .patient-action-menu summary {
     width: 100%;
+  }
+
+  .patient-identity {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: var(--s3);
+  }
+
+  .patient-identity .patient-avatar {
+    width: 92px;
+    height: 92px;
+  }
+
+  .patient-identity h2 {
+    font-size: 1.34rem;
   }
 
   .patient-list-head .page-actions {
@@ -3666,10 +3693,15 @@ textarea {
   }
 
   .patient-card {
-    grid-template-columns: 42px minmax(0, 1fr) auto;
+    grid-template-columns: 54px minmax(0, 1fr) auto;
     gap: var(--s3);
-    min-height: 74px;
+    min-height: 82px;
     padding: var(--s3);
+  }
+
+  .patient-card > .patient-avatar {
+    width: 54px;
+    height: 54px;
   }
 
   .patient-card-main {
@@ -3680,17 +3712,9 @@ textarea {
     display: none;
   }
 
-  .patient-card .mobile-only {
-    display: block;
-  }
-
-  .patient-last {
-    grid-column: 2;
-  }
-
   .patient-card .chevron {
     grid-column: 3;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
   }
 
@@ -3974,22 +3998,22 @@ textarea {
   }
 
   .patient-card {
-    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-columns: 50px minmax(0, 1fr) auto;
     min-height: 86px;
   }
 
   .patient-avatar {
-    width: 38px;
-    height: 38px;
+    width: 50px;
+    height: 50px;
   }
 
   .patient-identity {
-    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-columns: 88px minmax(0, 1fr);
   }
 
   .patient-identity .patient-avatar {
-    width: 42px;
-    height: 42px;
+    width: 88px;
+    height: 88px;
   }
 
   .meta-row,
@@ -4028,4 +4052,11 @@ textarea {
     scroll-behavior: auto !important;
     transition-duration: 1ms !important;
   }
+}
+.patient-directory-header span:first-child {
+  grid-column: 1 / span 2;
+}
+
+.patient-directory-header span:last-child {
+  grid-column: 3;
 }
