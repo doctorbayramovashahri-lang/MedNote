@@ -1,0 +1,68 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    name: Read app heartbeat
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+    steps:
+      - name: Validate configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "MedNote Supabase heartbeat failed: missing SUPABASE_URL or SUPABASE_ANON_KEY."
+            exit 1
+          fi
+
+      - name: Read heartbeat row
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          response_file="$(mktemp)"
+          http_code="$(
+            curl --silent --show-error --location \
+              --max-time 30 \
+              --connect-timeout 10 \
+              --output "$response_file" \
+              --write-out "%{http_code}" \
+              "${SUPABASE_URL%/}/rest/v1/app_heartbeat?select=id&name=eq.mednote&limit=1" \
+              --header "apikey: ${SUPABASE_ANON_KEY}" \
+              --header "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              --header "Accept: application/json"
+          )"
+
+          if [[ ! "$http_code" =~ ^2 ]]; then
+            echo "MedNote Supabase heartbeat failed: REST API returned HTTP ${http_code}."
+            head -c 500 "$response_file"
+            echo
+            exit 1
+          fi
+
+          python3 - "$response_file" <<'PY'
+          import json
+          import sys
+
+          path = sys.argv[1]
+          with open(path, "r", encoding="utf-8") as handle:
+              payload = json.load(handle)
+
+          if not isinstance(payload, list) or len(payload) != 1 or not payload[0].get("id"):
+              print("MedNote Supabase heartbeat failed: heartbeat row was not returned.")
+              sys.exit(1)
+
+          print("MedNote Supabase heartbeat passed.")
+          PY
